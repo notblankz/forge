@@ -16,7 +16,10 @@ func main() {
 
 	switch os.Args[1] {
 	case "build":
-		cli.Build(os.Args[2:])
+		if err := cli.Build(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
 	case "serve":
 		cli.Serve(os.Args[2:])
 	case "bench":
