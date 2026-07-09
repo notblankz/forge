@@ -32,7 +32,7 @@ func parseBuildOptions(args []string) (site.BuildOptions, error) {
 		}
 		return site.BuildOptions{}, fmt.Errorf("build: cannot access content directory %q: %w", root, err)
 	}
-	cur.Root = root
+	cur.ContentRoot = root
 
 	return cur, nil
 }

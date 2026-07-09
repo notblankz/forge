@@ -4,3 +4,6 @@
 
 # test content folder
 /content/
+
+# test dist folder
+/dist/

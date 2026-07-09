@@ -6,23 +6,33 @@ import (
 )
 
 type BuildOptions struct {
-	Root string
+	ContentRoot string
 }
 
 func Build(opts BuildOptions) error {
 
-	paths, err := collectContent(opts.Root)
+	paths, err := collectContent(opts.ContentRoot)
 	if err != nil {
 		return err
 	}
 
 	pages := make([]Page, 0, len(paths))
 	for _, path := range paths {
-		page, err := loadPage(path)
+		page, err := loadPage(path, opts.ContentRoot)
 		if err != nil {
 			return err
 		}
 		pages = append(pages, page)
+	}
+
+	for _, page := range pages {
+		html, err := page.render()
+		if err != nil {
+			return err
+		}
+		if err := page.write(html); err != nil {
+			return err
+		}
 	}
 
 	return nil
