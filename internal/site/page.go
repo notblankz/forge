@@ -3,6 +3,7 @@ package site
 import (
 	"bytes"
 	"fmt"
+	"html/template"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,6 +22,7 @@ type Page struct {
 type Frontmatter struct {
 	Title       string `yaml:"title"`
 	Description string `yaml:"description"`
+	Template    string `yaml:"template"`
 }
 
 // loadPage reads a content file and assembles it into a Page,
@@ -42,6 +44,7 @@ func loadPage(path string, contentRoot string) (Page, error) {
 	}
 	newPage.Frontmatter = frontmatter
 
+	// TODO: read output dir from buildOptions / site.toml instead of hardcoding "dist"
 	if err := newPage.resolveOutputPath(contentRoot, "dist"); err != nil {
 		return Page{}, err
 	}
@@ -77,8 +80,7 @@ func extractFrontmatter(path string) (string, string, error) {
 	return "", "", fmt.Errorf("frontmatter: unclosed delimiter in %q", path)
 }
 
-// This function takes the raw Frontmatter byte slice
-// and unmarshalls it into a Frontmatter Struct
+// parseFrontmatter unmarshals eaw YAML frontmatter into a Frontmatter struct
 func parseFrontmatter(raw []byte) (Frontmatter, error) {
 	res := Frontmatter{}
 	err := yaml.Unmarshal(raw, &res)
@@ -88,13 +90,34 @@ func parseFrontmatter(raw []byte) (Frontmatter, error) {
 	return res, nil
 }
 
-// render converts the page's markdown body to HTML and returns it.
-func (p *Page) render() ([]byte, error) {
-	var buf bytes.Buffer
-	if err := goldmark.Convert([]byte(p.Body), &buf); err != nil {
+// render converts the page's markdown body to HTML and returns it
+func (p *Page) render(theme *template.Template) ([]byte, error) {
+	type pageView struct {
+		Page
+		Content template.HTML
+	}
+
+	var fragmentBuf bytes.Buffer
+	if err := goldmark.Convert([]byte(p.Body), &fragmentBuf); err != nil {
 		return nil, err
 	}
-	return buf.Bytes(), nil
+
+	view := pageView{
+		Page:    *p,
+		Content: template.HTML(fragmentBuf.String()),
+	}
+
+	tmpl := selectTemplate(theme, *p)
+	if tmpl == nil {
+		return nil, fmt.Errorf("render: no template found for %q (missing page.html?)", p.Path)
+	}
+
+	var pageBuf bytes.Buffer
+	if err := tmpl.Execute(&pageBuf, view); err != nil {
+		return nil, err
+	}
+
+	return pageBuf.Bytes(), nil
 }
 
 // write saves the given HTML content to the page's resolved output path,
@@ -109,13 +132,13 @@ func (p *Page) write(content []byte) error {
 }
 
 // resolveOutputPath sets p.OutputPath by mapping the source path from
-// the content root into ContentRoot, swapping .md for .html
-func (p *Page) resolveOutputPath(contentRoot, ContentRoot string) error {
+// the content root into destRoot, swapping .md for .html
+func (p *Page) resolveOutputPath(contentRoot, destRoot string) error {
 	rel, err := filepath.Rel(contentRoot, p.Path)
 	if err != nil {
 		return err
 	}
 	rel = strings.TrimSuffix(rel, filepath.Ext(rel)) + ".html"
-	p.OutputPath = filepath.Join(ContentRoot, rel)
+	p.OutputPath = filepath.Join(destRoot, rel)
 	return nil
 }
