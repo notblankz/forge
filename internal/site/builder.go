@@ -12,7 +12,12 @@ type BuildOptions struct {
 func Build(opts BuildOptions) error {
 
 	// TODO: read theme name from site.toml instead of hardcoding
-	theme, err := loadTheme("themes/default")
+	config, err := loadConfig(opts.ContentRoot)
+	if err != nil {
+		return err
+	}
+
+	theme, err := loadTheme(filepath.Join("themes", config.Theme))
 	if err != nil {
 		return err
 	}
@@ -32,7 +37,7 @@ func Build(opts BuildOptions) error {
 	}
 
 	for _, page := range pages {
-		html, err := page.render(theme)
+		html, err := page.render(theme, config)
 		if err != nil {
 			return err
 		}

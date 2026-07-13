@@ -91,10 +91,11 @@ func parseFrontmatter(raw []byte) (Frontmatter, error) {
 }
 
 // render converts the page's markdown body to HTML and returns it
-func (p *Page) render(theme *template.Template) ([]byte, error) {
+func (p *Page) render(theme *template.Template, config SiteConfig) ([]byte, error) {
 	type pageView struct {
 		Page
 		Content template.HTML
+		Site    SiteConfig
 	}
 
 	var fragmentBuf bytes.Buffer
@@ -105,6 +106,7 @@ func (p *Page) render(theme *template.Template) ([]byte, error) {
 	view := pageView{
 		Page:    *p,
 		Content: template.HTML(fragmentBuf.String()),
+		Site:    config,
 	}
 
 	tmpl := selectTemplate(theme, *p)
