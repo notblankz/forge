@@ -1,7 +1,6 @@
 package site
 
 import (
-	"fmt"
 	"io/fs"
 	"path/filepath"
 )
@@ -11,7 +10,6 @@ type BuildOptions struct {
 }
 
 func Build(opts BuildOptions) error {
-
 	config, err := loadConfig(opts.ContentRoot)
 	if err != nil {
 		return err
@@ -51,24 +49,23 @@ func Build(opts BuildOptions) error {
 		return err
 	}
 
-	for name, c := range collections {
-		fmt.Printf("collection %q: %d pages, hasIndex=%v\n", name, len(c.Pages), c.Index != nil)
-	}
-
 	for _, c := range collections {
 		if c.Index != nil {
-			continue // has index.md, renders via normal page path
+			continue // has index.md hence use that, renders via normal page path
 		}
 		if err := generateListingPage(c, config, theme, "dist"); err != nil {
 			return err
 		}
 	}
 
+	if err := copyAssets(opts.ContentRoot, "dist"); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func collectContent(root string) ([]string, error) {
-
 	res := make([]string, 0)
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
