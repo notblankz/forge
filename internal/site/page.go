@@ -17,6 +17,7 @@ type Page struct {
 	Body        string
 	OutputPath  string
 	Frontmatter Frontmatter
+	URL         string // holds the web path of the page
 }
 
 type Frontmatter struct {
@@ -45,7 +46,7 @@ func loadPage(path string, contentRoot string) (Page, error) {
 	newPage.Frontmatter = frontmatter
 
 	// TODO: read output dir from buildOptions / site.toml instead of hardcoding "dist"
-	if err := newPage.resolveOutputPath(contentRoot, "dist"); err != nil {
+	if err := newPage.resolvePaths(contentRoot, "dist"); err != nil {
 		return Page{}, err
 	}
 
@@ -133,14 +134,15 @@ func (p *Page) write(content []byte) error {
 	return os.WriteFile(p.OutputPath, content, 0644)
 }
 
-// resolveOutputPath sets p.OutputPath by mapping the source path from
-// the content root into destRoot, swapping .md for .html
-func (p *Page) resolveOutputPath(contentRoot, destRoot string) error {
+// resolvePaths sets the page's output path and URL by mapping its source
+// path (relative to contentRoot) into destRoot and swapping .md for .html
+func (p *Page) resolvePaths(contentRoot, destRoot string) error {
 	rel, err := filepath.Rel(contentRoot, p.Path)
 	if err != nil {
 		return err
 	}
 	rel = strings.TrimSuffix(rel, filepath.Ext(rel)) + ".html"
+	p.URL = "/" + filepath.ToSlash(rel)
 	p.OutputPath = filepath.Join(destRoot, rel)
 	return nil
 }

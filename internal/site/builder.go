@@ -1,6 +1,7 @@
 package site
 
 import (
+	"fmt"
 	"io/fs"
 	"path/filepath"
 )
@@ -11,7 +12,6 @@ type BuildOptions struct {
 
 func Build(opts BuildOptions) error {
 
-	// TODO: read theme name from site.toml instead of hardcoding
 	config, err := loadConfig(opts.ContentRoot)
 	if err != nil {
 		return err
@@ -42,6 +42,24 @@ func Build(opts BuildOptions) error {
 			return err
 		}
 		if err := page.write(html); err != nil {
+			return err
+		}
+	}
+
+	collections, err := groupCollections(pages, opts.ContentRoot)
+	if err != nil {
+		return err
+	}
+
+	for name, c := range collections {
+		fmt.Printf("collection %q: %d pages, hasIndex=%v\n", name, len(c.Pages), c.Index != nil)
+	}
+
+	for _, c := range collections {
+		if c.Index != nil {
+			continue // has index.md, renders via normal page path
+		}
+		if err := generateListingPage(c, config, theme, "dist"); err != nil {
 			return err
 		}
 	}
