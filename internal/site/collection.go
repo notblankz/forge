@@ -14,6 +14,10 @@ type Collection struct {
 	Index *Page // index.md if present, else nil → auto-generate
 }
 
+// groupCollections partitions pages into collections keyed by their top-level
+// content directory. Pages that are located directly in the content root are standalone
+// and skipped. A collection's index.md is stored as its Index rather than listed
+// among its collection.Pages field
 func groupCollections(pages []Page, contentRoot string) (map[string]*Collection, error) {
 	collections := make(map[string](*Collection))
 
@@ -45,6 +49,8 @@ func groupCollections(pages []Page, contentRoot string) (map[string]*Collection,
 	return collections, nil
 }
 
+// generateListingPage renders a collection's auto-generated index using the
+// theme's listing.html template and writes it to <destRoot>/<name>/index.html
 func (b *Builder) generateListingPage(c *Collection) error {
 	type listingView struct {
 		Site  SiteConfig

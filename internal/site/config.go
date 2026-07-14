@@ -11,6 +11,7 @@ type SiteConfig struct {
 	Theme string `toml:"theme"`
 }
 
+// loadConfig reads and parses site.toml from the content root into a SiteConfig
 func loadConfig(contentRoot string) (SiteConfig, error) {
 	path := filepath.Join(contentRoot, "site.toml")
 	var config SiteConfig

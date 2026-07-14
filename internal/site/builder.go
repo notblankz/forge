@@ -18,6 +18,9 @@ type Builder struct {
 	theme       *template.Template
 }
 
+// Build compiles the site from the content directory: it loads pages, renders
+// them concurrently, generates collection listings, and copies assets into the
+// output directory
 func Build(opts BuildOptions) error {
 	b, err := newBuilder(opts)
 	if err != nil {
@@ -66,6 +69,8 @@ func Build(opts BuildOptions) error {
 	return nil
 }
 
+// newBuilder constructs a Builder from the given options, loading the site
+// config and theme that the rest of the build depends on
 func newBuilder(opts BuildOptions) (*Builder, error) {
 
 	config, err := loadConfig(opts.ContentRoot)
@@ -87,6 +92,8 @@ func newBuilder(opts BuildOptions) (*Builder, error) {
 	}, nil
 }
 
+// collectContent walks the content root recursively and returns the paths of
+// all markdown (.md) files found in a slice
 func collectContent(root string) ([]string, error) {
 	res := make([]string, 0)
 

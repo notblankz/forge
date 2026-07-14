@@ -6,6 +6,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// renderPages renders and writes all pages concurrently, using a worker pool
+// bounded to the number of CPUs. It returns the first error encountered
 func (b *Builder) renderPages(pages []Page) error {
 	g := new(errgroup.Group)
 	g.SetLimit(runtime.NumCPU())
