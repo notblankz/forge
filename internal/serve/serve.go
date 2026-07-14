@@ -12,15 +12,15 @@ import (
 	"github.com/notblankz/forge/internal/site"
 )
 
-type ServeOptions struct {
+type Config struct {
 	site.BuildOptions
 	Port int
 }
 
-// Serve builds the site once, serves the output directory over HTTP on
+// Run builds the site once, serves the output directory over HTTP on
 // localhost:3000, and watches the content and theme directories, rebuilding
 // on change until interrupted
-func Serve(opts ServeOptions) error {
+func Start(opts Config) error {
 	if err := site.Build(opts.BuildOptions); err != nil {
 		return err
 	}
