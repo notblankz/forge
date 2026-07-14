@@ -21,7 +21,10 @@ func main() {
 			os.Exit(2)
 		}
 	case "serve":
-		cli.Serve(os.Args[2:])
+		if err := cli.Serve(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 	case "bench":
 		cli.Bench(os.Args[2:])
 	default:

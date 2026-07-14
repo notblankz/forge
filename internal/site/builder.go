@@ -8,6 +8,7 @@ import (
 
 type BuildOptions struct {
 	ContentRoot string
+	DestRoot    string
 }
 
 type Builder struct {
@@ -80,7 +81,7 @@ func newBuilder(opts BuildOptions) (*Builder, error) {
 	// TODO: read output dir from buildOptions / site.toml instead of hardcoding "dist"
 	return &Builder{
 		contentRoot: opts.ContentRoot,
-		destRoot:    "dist",
+		destRoot:    opts.DestRoot,
 		config:      config,
 		theme:       theme,
 	}, nil
