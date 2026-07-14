@@ -1,0 +1,24 @@
+package site
+
+import (
+	"runtime"
+
+	"golang.org/x/sync/errgroup"
+)
+
+func (b *Builder) renderPages(pages []Page) error {
+	g := new(errgroup.Group)
+	g.SetLimit(runtime.NumCPU())
+
+	for _, page := range pages {
+		g.Go(func() error {
+			html, err := page.render(b.theme, b.config)
+			if err != nil {
+				return err
+			}
+			return page.write(html)
+		})
+	}
+
+	return g.Wait()
+}

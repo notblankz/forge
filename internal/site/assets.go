@@ -9,8 +9,8 @@ import (
 
 // copyAssets mirrors the content assets directory into the output directory,
 // copying every file. If the assets directory does not exist, it is a no-op
-func copyAssets(contentRoot, destRoot string) error {
-	assetsDir := filepath.Join(contentRoot, "assets")
+func (b *Builder) copyAssets() error {
+	assetsDir := filepath.Join(b.contentRoot, "assets")
 
 	if _, err := os.Stat(assetsDir); err != nil {
 		if os.IsNotExist(err) {
@@ -27,11 +27,11 @@ func copyAssets(contentRoot, destRoot string) error {
 			return nil
 		}
 
-		rel, err := filepath.Rel(contentRoot, path)
+		rel, err := filepath.Rel(b.contentRoot, path)
 		if err != nil {
 			return err
 		}
-		destPath := filepath.Join(destRoot, rel)
+		destPath := filepath.Join(b.destRoot, rel)
 
 		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 			return err

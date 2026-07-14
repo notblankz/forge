@@ -28,25 +28,24 @@ type Frontmatter struct {
 
 // loadPage reads a content file and assembles it into a Page,
 // extracting and parsing its frontmatter and body.
-func loadPage(path string, contentRoot string) (Page, error) {
+func (b *Builder) loadPage(path string) (Page, error) {
 	newPage := Page{}
 
 	newPage.Path = path
 
-	f, b, err := extractFrontmatter(path)
+	fm, body, err := extractFrontmatter(path)
 	if err != nil {
 		return Page{}, err
 	}
-	newPage.Body = b
+	newPage.Body = body
 
-	frontmatter, err := parseFrontmatter([]byte(f))
+	frontmatter, err := parseFrontmatter([]byte(fm))
 	if err != nil {
 		return Page{}, err
 	}
 	newPage.Frontmatter = frontmatter
 
-	// TODO: read output dir from buildOptions / site.toml instead of hardcoding "dist"
-	if err := newPage.resolvePaths(contentRoot, "dist"); err != nil {
+	if err := newPage.resolvePaths(b.contentRoot, b.destRoot); err != nil {
 		return Page{}, err
 	}
 

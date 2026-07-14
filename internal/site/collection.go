@@ -3,7 +3,6 @@ package site
 import (
 	"bytes"
 	"fmt"
-	"html/template"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,7 +45,7 @@ func groupCollections(pages []Page, contentRoot string) (map[string]*Collection,
 	return collections, nil
 }
 
-func generateListingPage(c *Collection, config SiteConfig, theme *template.Template, destRoot string) error {
+func (b *Builder) generateListingPage(c *Collection) error {
 	type listingView struct {
 		Site  SiteConfig
 		Name  string
@@ -54,12 +53,12 @@ func generateListingPage(c *Collection, config SiteConfig, theme *template.Templ
 	}
 
 	view := listingView{
-		Site:  config,
+		Site:  b.config,
 		Name:  c.Name,
 		Pages: c.Pages,
 	}
 
-	tmpl := theme.Lookup("listing.html")
+	tmpl := b.theme.Lookup("listing.html")
 	if tmpl == nil {
 		return fmt.Errorf("listing: no listing.html template in theme")
 	}
@@ -70,11 +69,10 @@ func generateListingPage(c *Collection, config SiteConfig, theme *template.Templ
 	}
 
 	// write the generated listing html file data to destRoot/<name>/index.html
-	// TODO: read output dir from buildOptions / site.toml instead of hardcoding "dist"
-	outPath := filepath.Join(destRoot, c.Name, "index.html")
+	outPath := filepath.Join(b.destRoot, c.Name, "index.html")
 	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
 		return err
 	}
 
-	return os.WriteFile(outPath, buf.Bytes(), 0755)
+	return os.WriteFile(outPath, buf.Bytes(), 0644)
 }
