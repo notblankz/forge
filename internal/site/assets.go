@@ -7,19 +7,18 @@ import (
 	"path/filepath"
 )
 
-// copyAssets mirrors the content assets directory into the output directory,
-// copying every file. If the assets directory does not exist, it is a no-op
-func (b *Builder) copyAssets() error {
-	assetsDir := filepath.Join(b.contentRoot, "assets")
-
-	if _, err := os.Stat(assetsDir); err != nil {
+// copyTree recursively copies every file under srcDir into destDir, preserving
+// each file's path relative to relBase. A no-op if srcDir doesn't exist, since
+// both content/assets/ and a theme's static/ are optional
+func copyTree(srcDir, relBase, destDir string) error {
+	if _, err := os.Stat(srcDir); err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
 		return err
 	}
 
-	return filepath.WalkDir(assetsDir, func(path string, d fs.DirEntry, err error) error {
+	return filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -27,11 +26,11 @@ func (b *Builder) copyAssets() error {
 			return nil
 		}
 
-		rel, err := filepath.Rel(b.contentRoot, path)
+		rel, err := filepath.Rel(relBase, path)
 		if err != nil {
 			return err
 		}
-		destPath := filepath.Join(b.destRoot, rel)
+		destPath := filepath.Join(destDir, rel)
 
 		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 			return err
@@ -39,7 +38,18 @@ func (b *Builder) copyAssets() error {
 
 		return copyFile(path, destPath)
 	})
+}
 
+// copyAssets mirrors content/assets/ into <dest>/assets/
+func (b *Builder) copyAssets() error {
+	assetsDir := filepath.Join(b.contentDir, "assets")
+	return copyTree(assetsDir, b.contentDir, b.destDir)
+}
+
+// copyThemeAssets mirrors the active theme's static/ directory into dest
+func (b *Builder) copyThemeAssets() error {
+	staticDir := filepath.Join(b.themeDir, "static")
+	return copyTree(staticDir, b.themeDir, b.destDir)
 }
 
 // copyFile streams the contents of src into a newly created dest file.

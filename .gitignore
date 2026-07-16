@@ -2,8 +2,8 @@
 /bin/
 *.exe
 
-# test content folder
-/content/
+# test site folder
+/test-site/
 
 # test dist folder
 /dist/

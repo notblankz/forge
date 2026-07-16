@@ -9,16 +9,13 @@ import (
 var servePort int
 
 var serveCmd = &cobra.Command{
-	Use:   "serve <content-dir>",
+	Use:   "serve <site-dir>",
 	Short: "Start the dev server with live rebuild",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		opts := serve.Config{
-			BuildOptions: site.BuildOptions{
-				ContentRoot: args[0],
-				DestRoot:    "dist",
-			},
-			Port: servePort,
+			BuildOptions: site.BuildOptions{SiteRoot: args[0]},
+			Port:         servePort,
 		}
 		return serve.Start(opts)
 	},

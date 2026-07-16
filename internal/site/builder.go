@@ -7,15 +7,16 @@ import (
 )
 
 type BuildOptions struct {
-	ContentRoot string
-	DestRoot    string
+	SiteRoot string
+	DestDir  string
 }
 
 type Builder struct {
-	contentRoot string
-	destRoot    string
-	config      SiteConfig
-	theme       *template.Template
+	contentDir string
+	themeDir   string
+	destDir    string
+	config     SiteConfig
+	theme      *template.Template
 }
 
 // Build compiles the site from the content directory: it loads pages, renders
@@ -27,7 +28,7 @@ func Build(opts BuildOptions) error {
 		return err
 	}
 
-	paths, err := collectContent(b.contentRoot)
+	paths, err := collectContent(b.contentDir)
 	if err != nil {
 		return err
 	}
@@ -47,7 +48,7 @@ func Build(opts BuildOptions) error {
 	}
 
 	// Create the collections map for the different collections in content/
-	collections, err := groupCollections(pages, b.contentRoot)
+	collections, err := groupCollections(pages, b.contentDir)
 	if err != nil {
 		return err
 	}
@@ -65,29 +66,36 @@ func Build(opts BuildOptions) error {
 		return err
 	}
 
+	if err := b.copyThemeAssets(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
-// newBuilder constructs a Builder from the given options, loading the site
-// config and theme that the rest of the build depends on
+// newBuilder constructs a Builder from the given options, deriving the site
+// layout and loading the config and theme the rest of the build depends on
 func newBuilder(opts BuildOptions) (*Builder, error) {
+	paths := NewSitePaths(opts.SiteRoot, opts.DestDir)
 
-	config, err := loadConfig(opts.ContentRoot)
+	config, err := loadConfig(paths.Config)
 	if err != nil {
 		return nil, err
 	}
 
-	theme, err := loadTheme(filepath.Join("themes", config.Theme))
+	themeDir := filepath.Join(ThemesRoot, config.Theme)
+
+	theme, err := loadTheme(themeDir, paths.Layouts)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO: read output dir from buildOptions / site.toml instead of hardcoding "dist"
 	return &Builder{
-		contentRoot: opts.ContentRoot,
-		destRoot:    opts.DestRoot,
-		config:      config,
-		theme:       theme,
+		contentDir: paths.Content,
+		themeDir:   themeDir,
+		destDir:    paths.Dest,
+		config:     config,
+		theme:      theme,
 	}, nil
 }
 

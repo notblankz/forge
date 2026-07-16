@@ -1,8 +1,6 @@
 package site
 
 import (
-	"path/filepath"
-
 	"github.com/BurntSushi/toml"
 )
 
@@ -18,9 +16,8 @@ type SiteConfig struct {
 	Social     []NavItem `toml:"social"`
 }
 
-// loadConfig reads and parses site.toml from the content root into a SiteConfig
-func loadConfig(contentRoot string) (SiteConfig, error) {
-	path := filepath.Join(contentRoot, "site.toml")
+// loadConfig reads and parses the site.toml at path into a SiteConfig
+func loadConfig(path string) (SiteConfig, error) {
 	var config SiteConfig
 	if _, err := toml.DecodeFile(path, &config); err != nil {
 		return SiteConfig{}, err

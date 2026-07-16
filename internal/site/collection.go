@@ -18,11 +18,11 @@ type Collection struct {
 // content directory. Pages that are located directly in the content root are standalone
 // and skipped. A collection's index.md is stored as its Index rather than listed
 // among its collection.Pages field
-func groupCollections(pages []Page, contentRoot string) (map[string]*Collection, error) {
+func groupCollections(pages []Page, contentDir string) (map[string]*Collection, error) {
 	collections := make(map[string](*Collection))
 
 	for _, page := range pages {
-		rel, err := filepath.Rel(contentRoot, page.Path)
+		rel, err := filepath.Rel(contentDir, page.Path)
 		if err != nil {
 			return nil, err
 		}
@@ -74,7 +74,7 @@ func (b *Builder) generateListingPage(c *Collection) error {
 	}
 
 	// write the generated listing html file data to destRoot/<name>/index.html
-	outPath := filepath.Join(b.destRoot, c.Name, "index.html")
+	outPath := filepath.Join(b.destDir, c.Name, "index.html")
 	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
 		return err
 	}

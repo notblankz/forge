@@ -17,20 +17,22 @@ type Config struct {
 	Port int
 }
 
-// Run builds the site once, serves the output directory over HTTP on
-// localhost:3000, and watches the content and theme directories, rebuilding
+// Start builds the site once, serves the output directory over HTTP, and
+// watches the content, site-level layouts, and themes directories, rebuilding
 // on change until interrupted
 func Start(opts Config) error {
 	if err := site.Build(opts.BuildOptions); err != nil {
 		return err
 	}
 
+	paths := site.NewSitePaths(opts.SiteRoot, opts.DestDir)
+
 	go func() {
-		fs := http.FileServer(http.Dir(opts.DestRoot))
-		http.Handle("/", fs)
+		fileServer := http.FileServer(http.Dir(paths.Dest))
+		http.Handle("/", fileServer)
 		fmt.Printf("\n  forge dev server\n")
 		fmt.Printf("  -> local:    http://localhost:%d\n", opts.Port)
-		fmt.Printf("  -> watching: %s, themes/\n\n", opts.ContentRoot)
+		fmt.Printf("  -> watching: %s, %s, %s\n\n", paths.Content, paths.Layouts, site.ThemesRoot)
 		addr := fmt.Sprintf(":%d", opts.Port)
 		if err := http.ListenAndServe(addr, nil); err != nil {
 			fmt.Fprintln(os.Stderr, "server error:", err)
@@ -43,7 +45,7 @@ func Start(opts Config) error {
 	}
 	defer watcher.Close()
 
-	if err := watchDirs(watcher, opts.ContentRoot, "themes"); err != nil {
+	if err := watchDirs(watcher, paths.Content, paths.Layouts, site.ThemesRoot); err != nil {
 		return err
 	}
 
@@ -69,6 +71,13 @@ func Start(opts Config) error {
 // since fsnotify does not watch subdirectories automatically
 func watchDirs(watcher *fsnotify.Watcher, roots ...string) error {
 	for _, root := range roots {
+		if _, err := os.Stat(root); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return err
+		}
+
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err

@@ -7,18 +7,44 @@ import (
 	"strings"
 )
 
-// loadTheme parses all HTML templates in the given theme directory
-// into a single template set / theme, keyed by the template filename
+// loadTheme parses all HTML templates at themeDir (themeDir/layouts/*.html and
+// themeDir/layouts/partials/*.html) into a single template set / theme, keyed
+// by the template filename, then merges in any overrides from siteLayoutsDir
+// since a later {{define}} of the same name replaces an earlier one, an
+// override just needs to be parsed after the theme for it to apply the user defined one
+// instead of the one in the theme
 // NOTE: theme is the entire collection of parsed template files in the themes/* directory
-func loadTheme(dir string) (*template.Template, error) {
-
-	fsys := os.DirFS(dir)
-	theme, err := template.ParseFS(fsys, "*.html", "partials/*.html")
+func loadTheme(themeDir, siteLayoutsDir string) (*template.Template, error) {
+	fsys := os.DirFS(themeDir)
+	theme, err := template.ParseFS(fsys, "layouts/*.html", "layouts/partials/*.html")
 	if err != nil {
 		return nil, err
 	}
 
-	return theme, nil
+	return mergeOverrides(theme, siteLayoutsDir)
+}
+
+// mergeOverrides parses every *.html directly under dir and under dir/partials/
+// into theme, if any exist. A no-op when dir has no matching files, since
+// site-level overrides are optional
+func mergeOverrides(theme *template.Template, dir string) (*template.Template, error) {
+	var files []string
+	for _, pattern := range []string{
+		filepath.Join(dir, "*.html"),
+		filepath.Join(dir, "partials", "*.html"),
+	} {
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, matches...)
+	}
+
+	if len(files) == 0 {
+		return theme, nil
+	}
+
+	return theme.ParseFiles(files...)
 }
 
 // selectTemplate returns the name of the template a page should render with,

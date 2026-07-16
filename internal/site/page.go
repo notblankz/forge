@@ -50,7 +50,7 @@ func (b *Builder) loadPage(path string) (Page, error) {
 	}
 	newPage.Frontmatter = frontmatter
 
-	if err := newPage.resolvePaths(b.contentRoot, b.destRoot); err != nil {
+	if err := newPage.resolvePaths(b.contentDir, b.destDir); err != nil {
 		return Page{}, err
 	}
 
@@ -139,14 +139,14 @@ func (p *Page) write(content []byte) error {
 }
 
 // resolvePaths sets the page's output path and URL, mapping the source path
-// (relative to contentRoot) into destRoot using clean-URL layout:
+// (relative to contentDir) into destDir using clean-URL layout:
 //
 //	home.md       : dist/index.html            (/)
 //	resume.md     : dist/resume/index.html     (/resume/)
 //	blog/post.md  : dist/blog/post/index.html  (/blog/post/)
 //	blog/index.md : dist/blog/index.html       (/blog/)
-func (p *Page) resolvePaths(contentRoot, destRoot string) error {
-	rel, err := filepath.Rel(contentRoot, p.Path)
+func (p *Page) resolvePaths(contentDir, destDir string) error {
+	rel, err := filepath.Rel(contentDir, p.Path)
 	if err != nil {
 		return err
 	}
@@ -164,7 +164,7 @@ func (p *Page) resolvePaths(contentRoot, destRoot string) error {
 		outRel = filepath.Join(dir, base, "index.html")
 	}
 
-	p.OutputPath = filepath.Join(destRoot, outRel)
+	p.OutputPath = filepath.Join(destDir, outRel)
 
 	// Remove index.html and keep only dir/base/ as the URL
 	urlPath := filepath.ToSlash(filepath.Dir(outRel))
