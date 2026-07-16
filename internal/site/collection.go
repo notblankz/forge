@@ -53,25 +53,24 @@ func groupCollections(pages []Page, contentRoot string) (map[string]*Collection,
 // theme's listing.html template and writes it to <destRoot>/<name>/index.html
 func (b *Builder) generateListingPage(c *Collection) error {
 	type listingView struct {
-		Site  SiteConfig
+		CommonView
 		Name  string
 		Pages []Page
 	}
 
 	view := listingView{
-		Site:  b.config,
+		CommonView: CommonView{
+			Site:      b.config,
+			PageTitle: c.Name,
+		},
 		Name:  c.Name,
 		Pages: c.Pages,
 	}
 
-	tmpl := b.theme.Lookup("listing.html")
-	if tmpl == nil {
-		return fmt.Errorf("listing: no listing.html template in theme")
-	}
-
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, view); err != nil {
-		return err
+	err := b.theme.ExecuteTemplate(&buf, "listing", view)
+	if err != nil {
+		return fmt.Errorf("generate listing page for %q: %w", c.Name, err)
 	}
 
 	// write the generated listing html file data to destRoot/<name>/index.html

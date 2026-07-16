@@ -41,11 +41,12 @@ func Build(opts BuildOptions) error {
 		pages = append(pages, page)
 	}
 
-	// Change renderPages to a method on Builder
+	// Render all the standalone pages
 	if err := b.renderPages(pages); err != nil {
 		return err
 	}
 
+	// Create the collections map for the different collections in content/
 	collections, err := groupCollections(pages, b.contentRoot)
 	if err != nil {
 		return err
@@ -55,13 +56,11 @@ func Build(opts BuildOptions) error {
 		if c.Index != nil {
 			continue // has index.md hence use that, renders via normal page path
 		}
-		// convert generateListingPage also to a method on builder
 		if err := b.generateListingPage(c); err != nil {
 			return err
 		}
 	}
 
-	// convert copyAssets to a method on builder
 	if err := b.copyAssets(); err != nil {
 		return err
 	}

@@ -26,6 +26,11 @@ type Frontmatter struct {
 	Template    string `yaml:"template"`
 }
 
+type CommonView struct {
+	Site      SiteConfig
+	PageTitle string // text for the <title> tag, decided per view
+}
+
 // loadPage reads a content file and assembles it into a Page,
 // extracting and parsing its frontmatter and body.
 func (b *Builder) loadPage(path string) (Page, error) {
@@ -80,7 +85,7 @@ func extractFrontmatter(path string) (string, string, error) {
 	return "", "", fmt.Errorf("frontmatter: unclosed delimiter in %q", path)
 }
 
-// parseFrontmatter unmarshals eaw YAML frontmatter into a Frontmatter struct
+// parseFrontmatter unmarshals raw YAML frontmatter into a Frontmatter struct
 func parseFrontmatter(raw []byte) (Frontmatter, error) {
 	res := Frontmatter{}
 	err := yaml.Unmarshal(raw, &res)
@@ -93,9 +98,9 @@ func parseFrontmatter(raw []byte) (Frontmatter, error) {
 // render converts the page's markdown body to HTML and returns it
 func (p *Page) render(theme *template.Template, config SiteConfig) ([]byte, error) {
 	type pageView struct {
+		CommonView
 		Page
 		Content template.HTML
-		Site    SiteConfig
 	}
 
 	var fragmentBuf bytes.Buffer
@@ -104,19 +109,19 @@ func (p *Page) render(theme *template.Template, config SiteConfig) ([]byte, erro
 	}
 
 	view := pageView{
+		CommonView: CommonView{
+			Site:      config,
+			PageTitle: p.Frontmatter.Title,
+		},
 		Page:    *p,
 		Content: template.HTML(fragmentBuf.String()),
-		Site:    config,
 	}
 
-	tmpl := selectTemplate(theme, *p)
-	if tmpl == nil {
-		return nil, fmt.Errorf("render: no template found for %q (missing page.html?)", p.Path)
-	}
+	tmplName := selectTemplate(theme, *p)
 
 	var pageBuf bytes.Buffer
-	if err := tmpl.Execute(&pageBuf, view); err != nil {
-		return nil, err
+	if err := theme.ExecuteTemplate(&pageBuf, tmplName, view); err != nil {
+		return nil, fmt.Errorf("render %q: %w", p.Path, err)
 	}
 
 	return pageBuf.Bytes(), nil
