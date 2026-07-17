@@ -17,6 +17,7 @@ type Builder struct {
 	destDir    string
 	config     SiteConfig
 	theme      *template.Template
+	shortcodes *Shortcodes
 }
 
 // Build compiles the site from the content directory: it loads pages, renders
@@ -90,12 +91,18 @@ func newBuilder(opts BuildOptions) (*Builder, error) {
 		return nil, err
 	}
 
+	shortcodes, err := loadShortcodes(themeDir, paths.Layouts, paths.Content)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Builder{
 		contentDir: paths.Content,
 		themeDir:   themeDir,
 		destDir:    paths.Dest,
 		config:     config,
 		theme:      theme,
+		shortcodes: shortcodes,
 	}, nil
 }
 

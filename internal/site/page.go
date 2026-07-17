@@ -96,17 +96,25 @@ func parseFrontmatter(raw []byte) (Frontmatter, error) {
 }
 
 // render converts the page's markdown body to HTML and returns it
-func (p *Page) render(theme *template.Template, config SiteConfig) ([]byte, error) {
+func (p *Page) render(theme *template.Template, sc Shortcodes, config SiteConfig) ([]byte, error) {
 	type pageView struct {
 		CommonView
 		Page
 		Content template.HTML
 	}
 
-	var fragmentBuf bytes.Buffer
-	if err := goldmark.Convert([]byte(p.Body), &fragmentBuf); err != nil {
+	// Expand the page markdown and resolve the shortcodes + add TOKENs
+	exp, err := sc.Expand(p.Body)
+	if err != nil {
 		return nil, err
 	}
+
+	var fragmentBuf bytes.Buffer
+	if err := goldmark.Convert([]byte(exp.markdown), &fragmentBuf); err != nil {
+		return nil, err
+	}
+
+	content := exp.Restore(fragmentBuf.String())
 
 	view := pageView{
 		CommonView: CommonView{
@@ -114,7 +122,7 @@ func (p *Page) render(theme *template.Template, config SiteConfig) ([]byte, erro
 			PageTitle: p.Frontmatter.Title,
 		},
 		Page:    *p,
-		Content: template.HTML(fragmentBuf.String()),
+		Content: template.HTML(content),
 	}
 
 	tmplName := selectTemplate(theme, *p)

@@ -14,7 +14,7 @@ func (b *Builder) renderPages(pages []Page) error {
 
 	for _, page := range pages {
 		g.Go(func() error {
-			html, err := page.render(b.theme, b.config)
+			html, err := page.render(b.theme, *b.shortcodes, b.config)
 			if err != nil {
 				return err
 			}
