@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/yuin/goldmark"
 )
 
 // TODO: add doc comments
@@ -174,9 +176,19 @@ func (s *Shortcodes) render(name, rawParams, body string) (string, error) {
 	// This Body field stores the body of the shortcode IF the shortcode
 	// needs to store a body between it's tags
 	// For eg: {{< xyz >}} This is the body of the shortcode {{< /xyz >}}
-	data["Body"] = body
 
+	// Render the body into HTML using goldmark and type case it into html.Template{}
+	// this is so that html/template does not escape it while rendering
 	var buf bytes.Buffer
+	if err := goldmark.Convert([]byte(body), &buf); err != nil {
+		return "", fmt.Errorf("shortcode %q: %w", name, err)
+	}
+	renderedContent := buf.String()
+
+	buf.Reset()
+
+	data["Body"] = template.HTML(renderedContent)
+
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return "", fmt.Errorf("shortcode %q: %w", name, err)
 	}
