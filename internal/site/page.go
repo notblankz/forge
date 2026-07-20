@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
-	"github.com/yuin/goldmark"
 	"gopkg.in/yaml.v3"
 )
 
@@ -21,9 +21,10 @@ type Page struct {
 }
 
 type Frontmatter struct {
-	Title       string `yaml:"title"`
-	Description string `yaml:"description"`
-	Template    string `yaml:"template"`
+	Date        time.Time `taml:"date"`
+	Title       string    `yaml:"title"`
+	Description string    `yaml:"description"`
+	Template    string    `yaml:"template"`
 }
 
 type CommonView struct {
@@ -96,7 +97,7 @@ func parseFrontmatter(raw []byte) (Frontmatter, error) {
 }
 
 // render converts the page's markdown body to HTML and returns it
-func (p *Page) render(theme *template.Template, sc Shortcodes, config SiteConfig) ([]byte, error) {
+func (b *Builder) renderPage(p Page) ([]byte, error) {
 	type pageView struct {
 		CommonView
 		Page
@@ -104,13 +105,13 @@ func (p *Page) render(theme *template.Template, sc Shortcodes, config SiteConfig
 	}
 
 	// Expand the page markdown and resolve the shortcodes + add TOKENs
-	exp, err := sc.Expand(p.Body)
+	exp, err := b.shortcodes.Expand(p.Body)
 	if err != nil {
 		return nil, err
 	}
 
 	var fragmentBuf bytes.Buffer
-	if err := goldmark.Convert([]byte(exp.markdown), &fragmentBuf); err != nil {
+	if err := b.markdown.Convert([]byte(exp.markdown), &fragmentBuf); err != nil {
 		return nil, err
 	}
 
@@ -118,17 +119,17 @@ func (p *Page) render(theme *template.Template, sc Shortcodes, config SiteConfig
 
 	view := pageView{
 		CommonView: CommonView{
-			Site:      config,
+			Site:      b.config,
 			PageTitle: p.Frontmatter.Title,
 		},
-		Page:    *p,
+		Page:    p,
 		Content: template.HTML(content),
 	}
 
-	tmplName := selectTemplate(theme, *p)
+	tmplName := selectTemplate(b.theme, p)
 
 	var pageBuf bytes.Buffer
-	if err := theme.ExecuteTemplate(&pageBuf, tmplName, view); err != nil {
+	if err := b.theme.ExecuteTemplate(&pageBuf, tmplName, view); err != nil {
 		return nil, fmt.Errorf("render %q: %w", p.Path, err)
 	}
 

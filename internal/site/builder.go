@@ -4,6 +4,12 @@ import (
 	"html/template"
 	"io/fs"
 	"path/filepath"
+
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
+
+	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
+	highlighting "github.com/yuin/goldmark-highlighting/v2"
 )
 
 type BuildOptions struct {
@@ -18,6 +24,7 @@ type Builder struct {
 	config     SiteConfig
 	theme      *template.Template
 	shortcodes *Shortcodes
+	markdown   goldmark.Markdown
 }
 
 // Build compiles the site from the content directory: it loads pages, renders
@@ -78,6 +85,16 @@ func Build(opts BuildOptions) error {
 // layout and loading the config and theme the rest of the build depends on
 func newBuilder(opts BuildOptions) (*Builder, error) {
 	paths := NewSitePaths(opts.SiteRoot, opts.DestDir)
+	markdown := goldmark.New(
+		goldmark.WithExtensions(
+			extension.GFM,
+			highlighting.NewHighlighting(
+				highlighting.WithFormatOptions(
+					chromahtml.WithClasses(true),
+				),
+			),
+		),
+	)
 
 	config, err := loadConfig(paths.Config)
 	if err != nil {
@@ -91,7 +108,7 @@ func newBuilder(opts BuildOptions) (*Builder, error) {
 		return nil, err
 	}
 
-	shortcodes, err := loadShortcodes(themeDir, paths.Layouts, paths.Content)
+	shortcodes, err := loadShortcodes(themeDir, paths.Layouts, paths.Content, markdown)
 	if err != nil {
 		return nil, err
 	}
@@ -103,6 +120,7 @@ func newBuilder(opts BuildOptions) (*Builder, error) {
 		config:     config,
 		theme:      theme,
 		shortcodes: shortcodes,
+		markdown:   markdown,
 	}, nil
 }
 

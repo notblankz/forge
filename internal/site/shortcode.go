@@ -14,14 +14,15 @@ import (
 
 // TODO: add doc comments
 type Shortcodes struct {
-	set *template.Template
+	set      *template.Template
+	markdown goldmark.Markdown
 }
 
 type shortcodeHelpers struct {
 	assetsDir string
 }
 
-func loadShortcodes(themeDir, siteLayoutsDir, contentDir string) (*Shortcodes, error) {
+func loadShortcodes(themeDir, siteLayoutsDir, contentDir string, md goldmark.Markdown) (*Shortcodes, error) {
 	helpers := shortcodeHelpers{assetsDir: filepath.Join(contentDir, "assets")}
 	set := template.New("shortcodes").Funcs(helpers.funcMap())
 
@@ -40,7 +41,10 @@ func loadShortcodes(themeDir, siteLayoutsDir, contentDir string) (*Shortcodes, e
 		}
 	}
 
-	return &Shortcodes{set: set}, nil
+	return &Shortcodes{
+		set:      set,
+		markdown: md,
+	}, nil
 }
 
 func (h shortcodeHelpers) funcMap() template.FuncMap {
@@ -180,7 +184,7 @@ func (s *Shortcodes) render(name, rawParams, body string) (string, error) {
 	// Render the body into HTML using goldmark and type case it into html.Template{}
 	// this is so that html/template does not escape it while rendering
 	var buf bytes.Buffer
-	if err := goldmark.Convert([]byte(body), &buf); err != nil {
+	if err := s.markdown.Convert([]byte(body), &buf); err != nil {
 		return "", fmt.Errorf("shortcode %q: %w", name, err)
 	}
 	renderedContent := buf.String()
