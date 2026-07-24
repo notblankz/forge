@@ -103,7 +103,7 @@ func parseFrontmatter(raw []byte) (Frontmatter, error) {
 }
 
 // render converts the page's markdown body to HTML and returns it
-func (b *Builder) renderPage(p Page) ([]byte, error) {
+func (b *Builder) renderPage(p Page) ([]byte, []string, error) {
 	type pageView struct {
 		CommonView
 		Page
@@ -111,14 +111,14 @@ func (b *Builder) renderPage(p Page) ([]byte, error) {
 	}
 
 	// Expand the page markdown and resolve the shortcodes + add TOKENs
-	exp, err := b.shortcodes.Expand(p.Body)
+	exp, deps, err := b.shortcodes.Expand(p.Body)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var fragmentBuf bytes.Buffer
 	if err := b.markdown.Convert([]byte(exp.markdown), &fragmentBuf); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	content := exp.Restore(fragmentBuf.String())
@@ -136,10 +136,10 @@ func (b *Builder) renderPage(p Page) ([]byte, error) {
 
 	var pageBuf bytes.Buffer
 	if err := b.theme.ExecuteTemplate(&pageBuf, tmplName, view); err != nil {
-		return nil, fmt.Errorf("render %q: %w", p.Path, err)
+		return nil, nil, fmt.Errorf("render %q: %w", p.Path, err)
 	}
 
-	return pageBuf.Bytes(), nil
+	return pageBuf.Bytes(), deps, nil
 }
 
 // write saves the given HTML content to the page's resolved output path,

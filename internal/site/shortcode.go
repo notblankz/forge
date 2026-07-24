@@ -16,6 +16,7 @@ import (
 type Shortcodes struct {
 	set      *template.Template
 	markdown goldmark.Markdown
+	helpers  shortcodeHelpers
 }
 
 type shortcodeHelpers struct {
@@ -44,6 +45,7 @@ func loadShortcodes(themeDir, siteLayoutsDir, contentDir string, md goldmark.Mar
 	return &Shortcodes{
 		set:      set,
 		markdown: md,
+		helpers:  helpers,
 	}, nil
 }
 
@@ -93,11 +95,25 @@ func groupSubstring(md string, m []int, idx int) string {
 	return md[start:m[2*idx+1]]
 }
 
-func (s *Shortcodes) Expand(md string) (expansion, error) {
+func (s *Shortcodes) Expand(md string) (expansion, []string, error) {
 	e := expansion{replacements: map[string]string{}}
+	seen := make(map[string]struct{}) // Set to store the folders this shortcode read
 	var out strings.Builder
 	tokenNum := 0
 	cursor := 0
+
+	setClone, err := s.set.Clone() // giving the shortcode a private copy of templates to prevent race conditions
+	if err != nil {
+		return expansion{}, nil, err
+	}
+	setClone.Funcs(template.FuncMap{
+		"readDir": func(sub string) ([]string, error) {
+			// here we note down the path that the shortcode reads
+			seen[sub] = struct{}{}
+			// then perform the usual combining of all the paths in the directory
+			return s.helpers.readDir(sub)
+		},
+	})
 
 	// This matches is a [][]int and each row contains index of the matched string indices
 	// Each row includes the different groups in that specific match of the string (can be worded better)
@@ -120,7 +136,7 @@ func (s *Shortcodes) Expand(md string) (expansion, error) {
 
 		// a closing tag that reaches here has no opener (a paired one is consumed below)
 		if closing == "/" {
-			return expansion{}, fmt.Errorf("shortcode: unexpected closing tag {{< /%s >}}", name)
+			return expansion{}, nil, fmt.Errorf("shortcode: unexpected closing tag {{< /%s >}}", name)
 		}
 
 		var body string
@@ -138,9 +154,9 @@ func (s *Shortcodes) Expand(md string) (expansion, error) {
 			}
 		}
 
-		html, err := s.render(name, params, body)
+		html, err := s.render(setClone, name, params, body)
 		if err != nil {
-			return expansion{}, err
+			return expansion{}, nil, err
 		}
 
 		// handle the match being an actual shortcode which needs to be replaced with a TOKEN
@@ -161,13 +177,23 @@ func (s *Shortcodes) Expand(md string) (expansion, error) {
 	out.WriteString(md[cursor:])
 
 	e.markdown = out.String()
-	return e, nil
+
+	// convert HashSet to a slice for easier processing
+	deps := make([]string, 0, len(seen))
+	for d := range seen {
+		deps = append(deps, d)
+	}
+
+	return e, deps, nil
 }
 
 // render executes the named shortcode template with its parsed params (plus a
 // paired tag's body as .Body) and returns the resulting HTML
-func (s *Shortcodes) render(name, rawParams, body string) (string, error) {
-	tmpl := s.set.Lookup(name + ".html")
+// Since every page get's it's own pvt copy of template set, we have to pass it into the function
+func (s *Shortcodes) render(set *template.Template, name, rawParams, body string) (string, error) {
+	// we use the private copy of the template set to avoid race conditions
+	// as each shortcode has it's own private seen HashSet
+	tmpl := set.Lookup(name + ".html")
 	if tmpl == nil {
 		return "", fmt.Errorf("shortcode: unknown shortcode %q", name)
 	}

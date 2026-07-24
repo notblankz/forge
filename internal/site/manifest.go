@@ -11,8 +11,9 @@ import (
 )
 
 type manifestEntry struct {
-	Hash   string `json:"hash"`
-	Output string `json:"output"`
+	Hash   string            `json:"hash"`
+	Output string            `json:"output"`
+	Deps   map[string]string `json:"deps,omitempty"`
 }
 
 func hashBytes(b []byte) string {
@@ -29,15 +30,47 @@ func hashFile(path string) (string, error) {
 	return hashBytes(b), nil
 }
 
-func (b *Builder) buildManifestMap(pages []Page) (map[string]manifestEntry, error) {
+func hashDir(dir string) (string, error) {
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return "", err
+	}
+
+	var b strings.Builder
+
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+
+		fmt.Fprintf(&b, "%s|%d|%d\n", path, info.Size(), info.ModTime().UnixNano())
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return hashBytes([]byte(b.String())), nil
+}
+
+func (b *Builder) buildManifestMap(pages []Page, prev map[string]manifestEntry) (map[string]manifestEntry, error) {
 	manifest := make(map[string]manifestEntry)
 
 	// This takes care of all the pages
 	for _, page := range pages {
-		manifest[page.Path] = manifestEntry{
-			Hash:   page.Hash,
-			Output: page.OutputPath,
+		entry := manifestEntry{Hash: page.Hash, Output: page.OutputPath}
+		if p, ok := prev[page.Path]; ok {
+			entry.Deps = p.Deps // default: keep last build's folder notes
 		}
+		manifest[page.Path] = entry
 	}
 
 	// This takes care of the @theme folder files
@@ -139,6 +172,30 @@ func diffManifests(prev, curr map[string]manifestEntry) map[string]struct{} {
 	return changed
 }
 
+func (b *Builder) depChangedPages(prev map[string]manifestEntry) (map[string]struct{}, error) {
+	changed := make(map[string]struct{})
+	cache := make(map[string]string)
+
+	for id, entry := range prev {
+		for dir, oldSnapshot := range entry.Deps {
+			nowSnapshot, ok := cache[dir]
+			if !ok {
+				var err error
+				nowSnapshot, err := hashDir(filepath.Join(b.contentDir, "assets", dir))
+				if err != nil {
+					return nil, err
+				}
+				cache[dir] = nowSnapshot
+			}
+			if nowSnapshot != oldSnapshot {
+				changed[id] = struct{}{}
+				break
+			}
+		}
+	}
+	return changed, nil
+}
+
 // deleteRemovedOutputs removes the rendered HTML of any page that was in the
 // previous manifest but is gone from the current one (i.e. its source file was
 // deleted), so stale pages don't linger in the output directory. This works on
@@ -154,6 +211,24 @@ func (b *Builder) deleteRemovedOutputs(prev, curr map[string]manifestEntry) erro
 		if err := os.Remove(entry.Output); err != nil && !os.IsNotExist(err) {
 			return err
 		}
+	}
+	return nil
+}
+
+// recordDeps updates the current manifest's deps field; adding fields on the pages we just rebuilt
+func (b *Builder) recordDeps(curr map[string]manifestEntry, rendered map[string][]string) error {
+	// Fresh snapshots for the pages we just rebuilt
+	for path, dirs := range rendered {
+		entry := curr[path]
+		entry.Deps = make(map[string]string, len(dirs))
+		for _, dir := range dirs {
+			snap, err := hashDir(filepath.Join(b.contentDir, "assets", dir))
+			if err != nil {
+				return err
+			}
+			entry.Deps[dir] = snap
+		}
+		curr[path] = entry
 	}
 	return nil
 }

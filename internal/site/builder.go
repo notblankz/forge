@@ -73,11 +73,11 @@ func Build(opts BuildOptions) error {
 	}
 
 	// Fingerprint this build, and load the last one to compare against
-	curr, err := b.buildManifestMap(pages)
+	prev, err := b.loadManifest()
 	if err != nil {
 		return err
 	}
-	prev, err := b.loadManifest()
+	curr, err := b.buildManifestMap(pages, prev)
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,15 @@ func Build(opts BuildOptions) error {
 			return err
 		}
 		// Get the dirty set of pages + collections
-		dirty := g.Dirty(diffManifests(prev, curr))
+		changed := diffManifests(prev, curr)
+		depChanged, err := b.depChangedPages(prev)
+		if err != nil {
+			return err
+		}
+		for id := range depChanged {
+			changed[id] = struct{}{}
+		}
+		dirty := g.Dirty(changed)
 
 		// Go through the full pages and collections slice, add only
 		// those pages and collection which also exists in dirty Set
@@ -124,7 +132,8 @@ func Build(opts BuildOptions) error {
 	}
 
 	// Render all the standalone pages
-	if err := b.renderPages(dirtyPages); err != nil {
+	renderedDeps, err := b.renderPages(dirtyPages)
+	if err != nil {
 		return err
 	}
 
@@ -142,6 +151,10 @@ func Build(opts BuildOptions) error {
 	}
 
 	if err := b.copyThemeAssets(); err != nil {
+		return err
+	}
+
+	if err := b.recordDeps(curr, renderedDeps); err != nil {
 		return err
 	}
 
