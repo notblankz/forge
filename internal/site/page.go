@@ -2,6 +2,7 @@ package site
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"html/template"
 	"os"
@@ -18,6 +19,7 @@ type Page struct {
 	OutputPath  string
 	Frontmatter Frontmatter
 	URL         string // holds the web path of the page
+	Hash        string
 }
 
 type Frontmatter struct {
@@ -39,9 +41,17 @@ func (b *Builder) loadPage(path string) (Page, error) {
 
 	newPage.Path = path
 
-	fm, body, err := extractFrontmatter(path)
+	// extract the bytes from the file
+	content, err := os.ReadFile(path)
 	if err != nil {
 		return Page{}, err
+	}
+
+	newPage.Hash = hashBytes(content)
+
+	fm, body, err := extractFrontmatter(content)
+	if err != nil {
+		return Page{}, fmt.Errorf("%q: %w", path, err)
 	}
 	newPage.Body = body
 
@@ -58,15 +68,11 @@ func (b *Builder) loadPage(path string) (Page, error) {
 	return newPage, nil
 }
 
-// extractFrontmatter reads a content file and separates its YAML
+// extractFrontmatter accepts a byte slice of content, separates its YAML
 // frontmatter from the markdown body, returning them as raw strings.
 // If the file has no frontmatter, the frontmatter return is empty and
 // the whole file is returned as the body
-func extractFrontmatter(path string) (string, string, error) {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return "", "", err
-	}
+func extractFrontmatter(content []byte) (string, string, error) {
 
 	cleanedContent := strings.ReplaceAll(string(content), "\r\n", "\n")
 	lines := strings.Split(cleanedContent, "\n")
@@ -83,7 +89,7 @@ func extractFrontmatter(path string) (string, string, error) {
 		}
 	}
 
-	return "", "", fmt.Errorf("frontmatter: unclosed delimiter in %q", path)
+	return "", "", errors.New("frontmatter: unclosed delimiter")
 }
 
 // parseFrontmatter unmarshals raw YAML frontmatter into a Frontmatter struct

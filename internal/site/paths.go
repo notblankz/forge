@@ -11,6 +11,7 @@ const ThemesRoot = "themes"
 // source of truth for where content, overrides, output, and config live, so the
 // builder and the dev server never derive these independently
 type SitePaths struct {
+	Root    string //<root>/
 	Content string // <root>/content   - markdown pages and assets/
 	Layouts string // <root>/layouts   - site-level template overrides
 	Dest    string // build output
@@ -26,6 +27,7 @@ func NewSitePaths(siteRoot, destOverride string) SitePaths {
 		dest = filepath.Join(siteRoot, "dist")
 	}
 	return SitePaths{
+		Root:    siteRoot,
 		Content: filepath.Join(siteRoot, "content"),
 		Layouts: filepath.Join(siteRoot, "layouts"),
 		Dest:    dest,

@@ -54,7 +54,7 @@ func Start(opts Config) error {
 		select {
 		case event := <-watcher.Events:
 			if event.Has(fsnotify.Create) {
-				if info, err := os.Stat(event.Name); err != nil && info.IsDir() {
+				if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
 					if err := watchDirs(watcher, event.Name); err != nil {
 						fmt.Fprintln(os.Stderr, "watch error:", err)
 					}

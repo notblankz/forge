@@ -10,6 +10,7 @@ import (
 // copyTree recursively copies every file under srcDir into destDir, preserving
 // each file's path relative to relBase. A no-op if srcDir doesn't exist, since
 // both content/assets/ and a theme's static/ are optional
+// TODO: still need to remove orphaned assets from the destDir
 func copyTree(srcDir, relBase, destDir string) error {
 	if _, err := os.Stat(srcDir); err != nil {
 		if os.IsNotExist(err) {
@@ -31,6 +32,18 @@ func copyTree(srcDir, relBase, destDir string) error {
 			return err
 		}
 		destPath := filepath.Join(destDir, rel)
+
+		// Skip if the destination is already up to date with the source
+		srcInfo, err := d.Info()
+		if err != nil {
+			return err
+		}
+		// Here we check if the files at src and dest are 1) same size and 2) dest is not older than src
+		if destInfo, err := os.Stat(destPath); err == nil &&
+			destInfo.Size() == srcInfo.Size() &&
+			!srcInfo.ModTime().After(destInfo.ModTime()) {
+			return nil
+		}
 
 		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 			return err
