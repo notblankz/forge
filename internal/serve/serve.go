@@ -48,6 +48,7 @@ func Start(opts Config) error {
 	if err := watchDirs(watcher, paths.Content, paths.Layouts, site.ThemesRoot); err != nil {
 		return err
 	}
+	watcher.Add(filepath.Join(paths.Root, "site.toml"))
 
 	var debounce *time.Timer
 	for {
