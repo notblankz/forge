@@ -10,16 +10,16 @@ import (
 // copyTree recursively copies every file under srcDir into destDir, preserving
 // each file's path relative to relBase. A no-op if srcDir doesn't exist, since
 // both content/assets/ and a theme's static/ are optional
-// TODO: still need to remove orphaned assets from the destDir
-func copyTree(srcDir, relBase, destDir string) error {
+func copyTree(srcDir, relBase, destDir string) ([]string, error) {
 	if _, err := os.Stat(srcDir); err != nil {
 		if os.IsNotExist(err) {
-			return nil
+			return nil, nil
 		}
-		return err
+		return nil, err
 	}
 
-	return filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, err error) error {
+	var dests []string
+	err := filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -32,6 +32,7 @@ func copyTree(srcDir, relBase, destDir string) error {
 			return err
 		}
 		destPath := filepath.Join(destDir, rel)
+		dests = append(dests, destPath)
 
 		// Skip if the destination is already up to date with the source
 		srcInfo, err := d.Info()
@@ -51,18 +52,52 @@ func copyTree(srcDir, relBase, destDir string) error {
 
 		return copyFile(path, destPath)
 	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return dests, nil
 }
 
 // copyAssets mirrors content/assets/ into <dest>/assets/
-func (b *Builder) copyAssets() error {
+func (b *Builder) copyAssets() ([]string, error) {
 	assetsDir := filepath.Join(b.contentDir, "assets")
 	return copyTree(assetsDir, b.contentDir, b.destDir)
 }
 
 // copyThemeAssets mirrors the active theme's static/ directory into dest
-func (b *Builder) copyThemeAssets() error {
+func (b *Builder) copyThemeAssets() ([]string, error) {
 	staticDir := filepath.Join(b.themeDir, "static")
 	return copyTree(staticDir, b.themeDir, b.destDir)
+}
+
+// cleanOrphans removes files a previous build wrote to destDir that this build
+// no longer produces (e.g. a renamed or deleted source). Rather than walking
+// destDir, it diffs the previous build's recorded output list against this
+// build's expected set and deletes only the difference; files already gone are
+// ignored. It returns the current expected outputs as a slice so the caller can
+// persist them (saveOutputs) for the next build to diff against
+func (b *Builder) cleanOrphans(expected map[string]struct{}) ([]string, error) {
+	prevOutputs, err := b.loadOutputs()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, out := range prevOutputs {
+		if _, ok := expected[out]; !ok {
+			if err := os.Remove(out); err != nil && !os.IsNotExist(err) {
+				return nil, err
+			}
+		}
+	}
+
+	expectedSlice := make([]string, 0, len(expected))
+	for p := range expected {
+		expectedSlice = append(expectedSlice, p)
+	}
+
+	return expectedSlice, nil
 }
 
 // copyFile streams the contents of src into a newly created dest file.

@@ -124,11 +124,6 @@ func Build(opts BuildOptions) error {
 				dirtyCollections = append(dirtyCollections, c)
 			}
 		}
-
-		// cleanup output directory
-		if err := b.deleteRemovedOutputs(prev, curr); err != nil {
-			return err
-		}
 	}
 
 	// Render all the standalone pages
@@ -146,15 +141,47 @@ func Build(opts BuildOptions) error {
 		}
 	}
 
-	if err := b.copyAssets(); err != nil {
+	assetDests, err := b.copyAssets()
+	if err != nil {
 		return err
 	}
 
-	if err := b.copyThemeAssets(); err != nil {
+	themeDests, err := b.copyThemeAssets()
+	if err != nil {
+		return err
+	}
+
+	expected := make(map[string]struct{})
+	// Add all the output HTML pages into expected set
+	for _, p := range pages {
+		expected[p.OutputPath] = struct{}{}
+	}
+	// add the collections auto generated listing page
+	for _, c := range collections {
+		if c.Index == nil {
+			expected[filepath.Join(b.destDir, c.Name, "index.html")] = struct{}{}
+		}
+	}
+	// add all the asset destinations being used in build
+	for _, d := range assetDests {
+		expected[d] = struct{}{}
+	}
+	// add all the theme asset destinations being used in build
+	for _, d := range themeDests {
+		expected[d] = struct{}{}
+	}
+
+	// Delete only what the last build wrote that this build no longer produces
+	expectedOutputs, err := b.cleanOrphans(expected)
+	if err != nil {
 		return err
 	}
 
 	if err := b.recordDeps(curr, renderedDeps); err != nil {
+		return err
+	}
+
+	if err := b.saveOutputs(expectedOutputs); err != nil {
 		return err
 	}
 

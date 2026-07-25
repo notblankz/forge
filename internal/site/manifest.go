@@ -196,25 +196,6 @@ func (b *Builder) depChangedPages(prev map[string]manifestEntry) (map[string]str
 	return changed, nil
 }
 
-// deleteRemovedOutputs removes the rendered HTML of any page that was in the
-// previous manifest but is gone from the current one (i.e. its source file was
-// deleted), so stale pages don't linger in the output directory. This works on
-// input-only nodes (@config/@theme) have no Output and are skipped.
-func (b *Builder) deleteRemovedOutputs(prev, curr map[string]manifestEntry) error {
-	for id, entry := range prev {
-		if _, ok := curr[id]; ok {
-			continue // still present
-		}
-		if entry.Output == "" {
-			continue // not a page (@content/@listing), nothing on disk to remove
-		}
-		if err := os.Remove(entry.Output); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-	}
-	return nil
-}
-
 // recordDeps updates the current manifest's deps field; adding fields on the pages we just rebuilt
 func (b *Builder) recordDeps(curr map[string]manifestEntry, rendered map[string][]string) error {
 	// Fresh snapshots for the pages we just rebuilt
@@ -231,4 +212,30 @@ func (b *Builder) recordDeps(curr map[string]manifestEntry, rendered map[string]
 		curr[path] = entry
 	}
 	return nil
+}
+
+// loadOutputs returns the list of files the previous build wrote to dist/,
+// or nil on the first build
+func (b *Builder) loadOutputs() ([]string, error) {
+	content, err := os.ReadFile(filepath.Join(b.siteRoot, ".forge-outputs.json"))
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	if err := json.Unmarshal(content, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// saveOutputs saves the list of files that this build wrote to dist/
+func (b *Builder) saveOutputs(paths []string) error {
+	content, err := json.Marshal(paths)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(b.siteRoot, ".forge-outputs.json"), content, 0644)
 }
