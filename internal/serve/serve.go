@@ -45,7 +45,14 @@ func Start(opts Config) error {
 	}
 	defer watcher.Close()
 
-	if err := watchDirs(watcher, paths.Content, paths.Layouts, site.ThemesRoot); err != nil {
+	config, err := site.LoadConfig(paths.Config)
+	if err != nil {
+		return err
+	}
+
+	themeDir := site.ResolveThemeDir(paths.Root, config.Theme)
+
+	if err := watchDirs(watcher, paths.Content, paths.Layouts, themeDir); err != nil {
 		return err
 	}
 	watcher.Add(filepath.Join(paths.Root, "site.toml"))

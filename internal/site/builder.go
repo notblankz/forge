@@ -242,12 +242,12 @@ func newBuilder(opts BuildOptions) (*Builder, error) {
 		),
 	)
 
-	config, err := loadConfig(paths.Config)
+	config, err := LoadConfig(paths.Config)
 	if err != nil {
 		return nil, err
 	}
 
-	themeDir := filepath.Join(ThemesRoot, config.Theme)
+	themeDir := ResolveThemeDir(paths.Root, config.Theme)
 
 	theme, err := loadTheme(themeDir, paths.Layouts)
 	if err != nil {

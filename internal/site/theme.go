@@ -68,3 +68,18 @@ func selectTemplate(theme *template.Template, page Page) string {
 
 	return "page"
 }
+
+// ResolveThemeDir locates a theme from the site.toml `theme` value:
+//   - an absolute path is used as-is
+//   - a relative path is resolved against the site root
+//   - a bare name maps to <siteRoot>/themes/<name>
+func ResolveThemeDir(siteRoot, theme string) string {
+	switch {
+	case filepath.IsAbs(theme):
+		return theme
+	case strings.ContainsAny(theme, `/\`):
+		return filepath.Join(siteRoot, theme)
+	default:
+		return filepath.Join(siteRoot, "themes", theme)
+	}
+}

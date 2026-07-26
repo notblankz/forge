@@ -17,7 +17,7 @@ type SiteConfig struct {
 }
 
 // loadConfig reads and parses the site.toml at path into a SiteConfig
-func loadConfig(path string) (SiteConfig, error) {
+func LoadConfig(path string) (SiteConfig, error) {
 	var config SiteConfig
 	if _, err := toml.DecodeFile(path, &config); err != nil {
 		return SiteConfig{}, err
