@@ -96,6 +96,12 @@ func groupSubstring(md string, m []int, idx int) string {
 }
 
 func (s *Shortcodes) Expand(md string) (expansion, []string, error) {
+
+	// Early exit if No shortcodes exist
+	if !strings.Contains(md, "{{<") {
+		return expansion{markdown: md}, nil, nil
+	}
+
 	e := expansion{replacements: map[string]string{}}
 	seen := make(map[string]struct{}) // Set to store the folders this shortcode read
 	var out strings.Builder

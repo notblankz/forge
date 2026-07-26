@@ -8,5 +8,8 @@
 # test dist folder
 /dist/
 
+# bench folder
+/bench/
+
 # test theme folder
 /themes/
