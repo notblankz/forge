@@ -181,7 +181,7 @@ func (b *Builder) depChangedPages(prev map[string]manifestEntry) (map[string]str
 			nowSnapshot, ok := cache[dir]
 			if !ok {
 				var err error
-				nowSnapshot, err := hashDir(filepath.Join(b.contentDir, "assets", dir))
+				nowSnapshot, err := hashDir(filepath.Join(b.contentDir, dir))
 				if err != nil {
 					return nil, err
 				}
@@ -203,7 +203,7 @@ func (b *Builder) recordDeps(curr map[string]manifestEntry, rendered map[string]
 		entry := curr[path]
 		entry.Deps = make(map[string]string, len(dirs))
 		for _, dir := range dirs {
-			snap, err := hashDir(filepath.Join(b.contentDir, "assets", dir))
+			snap, err := hashDir(filepath.Join(b.contentDir, dir))
 			if err != nil {
 				return err
 			}

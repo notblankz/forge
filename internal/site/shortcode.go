@@ -244,20 +244,22 @@ func (e *expansion) Restore(html string) string {
 	return html
 }
 
-func (h shortcodeHelpers) readDir(sub string) ([]string, error) {
+func (h shortcodeHelpers) readDir(path string) ([]string, error) {
+	subDirectory := filepath.Base(path)
 	var webPaths []string
-	err := filepath.WalkDir(filepath.Join(h.assetsDir, sub), func(path string, d fs.DirEntry, err error) error {
+
+	err := filepath.WalkDir(filepath.Join(h.assetsDir, subDirectory), func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
 			return nil
 		}
-		rel, err := filepath.Rel(h.assetsDir, path)
+		r, err := filepath.Rel(h.assetsDir, path)
 		if err != nil {
 			return err
 		}
-		webPaths = append(webPaths, "/assets/"+filepath.ToSlash(rel))
+		webPaths = append(webPaths, "/assets/"+filepath.ToSlash(r))
 		return nil
 	})
 	return webPaths, err
