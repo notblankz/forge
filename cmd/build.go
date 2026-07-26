@@ -21,11 +21,11 @@ var buildCmd = &cobra.Command{
 			}
 			return fmt.Errorf("build: cannot access site directory %q: %w", siteRoot, err)
 		}
-		return site.Build(site.BuildOptions{SiteRoot: siteRoot})
+		return site.Build(site.BuildOptions{SiteRoot: siteRoot, Timing: timing})
 	},
 }
 
 func init() {
-	// TODO: also add --output flag 
+	// TODO: also add --output flag
 	rootCmd.AddCommand(buildCmd)
 }

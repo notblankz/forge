@@ -14,7 +14,7 @@ var serveCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		opts := serve.Config{
-			BuildOptions: site.BuildOptions{SiteRoot: args[0]},
+			BuildOptions: site.BuildOptions{SiteRoot: args[0], Timing: timing},
 			Port:         servePort,
 		}
 		return serve.Start(opts)

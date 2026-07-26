@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"runtime"
 	"time"
 
 	"github.com/notblankz/forge/internal/dag"
+	"github.com/notblankz/forge/internal/timing"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"golang.org/x/sync/errgroup"
@@ -20,6 +22,7 @@ import (
 type BuildOptions struct {
 	SiteRoot string
 	DestDir  string
+	Timing   bool
 }
 
 type Builder struct {
@@ -37,6 +40,7 @@ type Builder struct {
 // them concurrently, generates collection listings, and copies assets into the
 // output directory
 func Build(opts BuildOptions) error {
+	t := timing.NewTimer()
 	start := time.Now()
 
 	b, err := newBuilder(opts)
@@ -44,10 +48,14 @@ func Build(opts BuildOptions) error {
 		return err
 	}
 
+	t.Mark("newBuilder")
+
 	paths, err := collectContent(b.contentDir)
 	if err != nil {
 		return err
 	}
+
+	t.Mark("collect content")
 
 	pages := make([]Page, len(paths))
 	g := new(errgroup.Group)
@@ -66,11 +74,15 @@ func Build(opts BuildOptions) error {
 		return err
 	}
 
+	t.Mark("load + hash pages")
+
 	// Create the collections map for the different collections in content/
 	collections, err := groupCollections(pages, b.contentDir)
 	if err != nil {
 		return err
 	}
+
+	t.Mark("group collections")
 
 	// Fingerprint this build, and load the last one to compare against
 	prev, err := b.loadManifest()
@@ -81,6 +93,8 @@ func Build(opts BuildOptions) error {
 	if err != nil {
 		return err
 	}
+
+	t.Mark("build manifest")
 
 	// Decide what to rebuild
 	var dirtyPages []Page
@@ -126,11 +140,15 @@ func Build(opts BuildOptions) error {
 		}
 	}
 
+	t.Mark("diff + dirty")
+
 	// Render all the standalone pages
 	renderedDeps, err := b.renderPages(dirtyPages)
 	if err != nil {
 		return err
 	}
+
+	t.Mark("render pages")
 
 	for _, c := range dirtyCollections {
 		if c.Index != nil {
@@ -141,6 +159,8 @@ func Build(opts BuildOptions) error {
 		}
 	}
 
+	t.Mark("generate listings")
+
 	assetDests, err := b.copyAssets()
 	if err != nil {
 		return err
@@ -150,6 +170,8 @@ func Build(opts BuildOptions) error {
 	if err != nil {
 		return err
 	}
+
+	t.Mark("copy assets")
 
 	expected := make(map[string]struct{})
 	// Add all the output HTML pages into expected set
@@ -185,11 +207,23 @@ func Build(opts BuildOptions) error {
 		return err
 	}
 
-	fmt.Printf("built in %s\n", time.Since(start))
+	t.Mark("clean orphans")
 
 	// we write the new manifest at the end to preserve
 	// the old manifest in case of an error mid-build
-	return b.saveManifest(curr)
+	// return b.saveManifest(curr)
+	if err := b.saveManifest(curr); err != nil {
+		return err
+	}
+	t.Mark("save manifest")
+
+	fmt.Printf("built in %s\n", time.Since(start))
+
+	if opts.Timing {
+		t.Report(os.Stdout)
+	}
+
+	return nil
 }
 
 // newBuilder constructs a Builder from the given options, deriving the site
