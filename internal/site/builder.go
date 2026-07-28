@@ -231,21 +231,22 @@ func Build(opts BuildOptions) error {
 func newBuilder(opts BuildOptions) (*Builder, error) {
 	paths := NewSitePaths(opts.SiteRoot, opts.DestDir)
 
-	markdown := goldmark.New(
-		goldmark.WithExtensions(
-			extension.GFM,
-			highlighting.NewHighlighting(
-				highlighting.WithFormatOptions(
-					chromahtml.WithClasses(true),
-				),
-			),
-		),
-	)
-
 	config, err := LoadConfig(paths.Config)
 	if err != nil {
 		return nil, err
 	}
+
+	extensions := []goldmark.Extender{extension.GFM}
+
+	if config.SyntaxHighlighting {
+		extensions = append(extensions, highlighting.NewHighlighting(
+			highlighting.WithFormatOptions(
+				chromahtml.WithClasses(true),
+			),
+		))
+	}
+
+	markdown := goldmark.New(goldmark.WithExtensions(extensions...))
 
 	themeDir := ResolveThemeDir(paths.Root, config.Theme)
 
