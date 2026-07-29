@@ -11,9 +11,9 @@ import (
 )
 
 type manifestEntry struct {
-	Hash   string            `json:"hash"`
-	Output string            `json:"output"`
-	Deps   map[string]string `json:"deps,omitempty"`
+	Hash    string            `json:"hash,omitempty"`
+	Outputs []string          `json:"outputs,omitempty"`
+	Deps    map[string]string `json:"deps,omitempty"`
 }
 
 // hashBytes returns the hex-encoded SHA-256 of b
@@ -67,12 +67,12 @@ func hashDir(dir string) (string, error) {
 
 // buildManifestMap builds the current manifest: each page's content hash and
 // output path (deps carried over from prev), plus @config and @theme hashes
-func (b *Builder) buildManifestMap(pages []Page, prev map[string]manifestEntry) (map[string]manifestEntry, error) {
+func (b *Builder) buildManifestMap(pages []Page, collections map[string]*Collection, prev map[string]manifestEntry) (map[string]manifestEntry, error) {
 	manifest := make(map[string]manifestEntry)
 
 	// This takes care of all the pages
 	for _, page := range pages {
-		entry := manifestEntry{Hash: page.Hash, Output: page.OutputPath}
+		entry := manifestEntry{Hash: page.Hash, Outputs: []string{page.OutputPath}}
 		if p, ok := prev[page.Path]; ok {
 			entry.Deps = p.Deps // default: keep last build's folder notes
 		}
@@ -113,6 +113,15 @@ func (b *Builder) buildManifestMap(pages []Page, prev map[string]manifestEntry) 
 		return nil, err
 	}
 	manifest["@config"] = manifestEntry{Hash: configSum}
+
+	// This takes care of the auto-generated listings
+	for name, c := range collections {
+		if c.Index == nil {
+			manifest["@listing:"+name] = manifestEntry{
+				Outputs: []string{filepath.Join(b.destDir, name, "index.html")},
+			}
+		}
+	}
 
 	return manifest, nil
 }
@@ -204,9 +213,9 @@ func (b *Builder) pagesWithChangedDeps(prev map[string]manifestEntry) (map[strin
 	return changed, nil
 }
 
-// recordDeps records fresh asset-folder deps for the pages just rebuilt; pages
+// recordRenderedDeps records fresh asset-folder deps for the pages just rebuilt; pages
 // not rebuilt keep the deps carried forward by buildManifestMap
-func (b *Builder) recordDeps(curr map[string]manifestEntry, rendered map[string][]string) error {
+func (b *Builder) recordRenderedDeps(curr map[string]manifestEntry, rendered map[string][]string) error {
 	// Fresh snapshots for the pages we just rebuilt
 	for path, dirs := range rendered {
 		entry := curr[path]
@@ -221,30 +230,4 @@ func (b *Builder) recordDeps(curr map[string]manifestEntry, rendered map[string]
 		curr[path] = entry
 	}
 	return nil
-}
-
-// loadOutputs returns the list of files the previous build wrote to dist/,
-// or nil on the first build
-func (b *Builder) loadOutputs() ([]string, error) {
-	content, err := os.ReadFile(filepath.Join(b.siteRoot, ".forge-outputs.json"))
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	var out []string
-	if err := json.Unmarshal(content, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// saveOutputs saves the list of files that this build wrote to dist/
-func (b *Builder) saveOutputs(paths []string) error {
-	content, err := json.Marshal(paths)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join(b.siteRoot, ".forge-outputs.json"), content, 0644)
 }

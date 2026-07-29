@@ -72,32 +72,28 @@ func (b *Builder) copyThemeAssets() ([]string, error) {
 	return copyTree(staticDir, b.themeDir, b.destDir)
 }
 
-// cleanOrphans removes files a previous build wrote to destDir that this build
-// no longer produces (e.g. a renamed or deleted source). Rather than walking
-// destDir, it diffs the previous build's recorded output list against this
-// build's expected set and deletes only the difference; files already gone are
-// ignored. It returns the current expected outputs as a slice so the caller can
-// persist them (saveOutputs) for the next build to diff against
-func (b *Builder) cleanOrphans(expected map[string]struct{}) ([]string, error) {
-	prevOutputs, err := b.loadOutputs()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, out := range prevOutputs {
-		if _, ok := expected[out]; !ok {
-			if err := os.Remove(out); err != nil && !os.IsNotExist(err) {
-				return nil, err
-			}
+// cleanOrphans removes files the previous build wrote to dist/ that the current
+// build no longer produces (deleted pages, removed assets, renames). It diffs
+// every node's Outputs across the two manifests and deletes the difference;
+// files already gone are ignored
+func (b *Builder) cleanOrphans(prev, curr map[string]manifestEntry) error {
+	kept := make(map[string]struct{})
+	for _, e := range curr {
+		for _, out := range e.Outputs {
+			kept[out] = struct{}{}
 		}
 	}
 
-	expectedSlice := make([]string, 0, len(expected))
-	for p := range expected {
-		expectedSlice = append(expectedSlice, p)
+	for _, e := range prev {
+		for _, out := range e.Outputs {
+			if _, ok := kept[out]; !ok {
+				if err := os.Remove(out); err != nil && !os.IsNotExist(err) {
+					return err
+				}
+			}
+		}
 	}
-
-	return expectedSlice, nil
+	return nil
 }
 
 // copyFile streams the contents of src into a newly created dest file.

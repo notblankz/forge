@@ -37,7 +37,7 @@ type Builder struct {
 }
 
 // Build compiles the site from the content directory: it loads pages, renders
-// them concurrently, generates collection listings, and copies assets into the
+// them concurrManifestently, generates collection listings, and copies assets into the
 // output directory
 func Build(opts BuildOptions) error {
 	t := timing.NewTimer()
@@ -89,7 +89,7 @@ func Build(opts BuildOptions) error {
 	if err != nil {
 		return err
 	}
-	curr, err := b.buildManifestMap(pages, prev)
+	currManifest, err := b.buildManifestMap(pages, collections, prev)
 	if err != nil {
 		return err
 	}
@@ -116,7 +116,7 @@ func Build(opts BuildOptions) error {
 			return err
 		}
 		// Get the dirty set of pages + collections
-		changed := diffManifests(prev, curr)
+		changed := diffManifests(prev, currManifest)
 		depChanged, err := b.pagesWithChangedDeps(prev)
 		if err != nil {
 			return err
@@ -165,45 +165,22 @@ func Build(opts BuildOptions) error {
 	if err != nil {
 		return err
 	}
+	currManifest["@assets"] = manifestEntry{Outputs: assetDests}
 
 	themeDests, err := b.copyThemeAssets()
 	if err != nil {
 		return err
 	}
+	currManifest["@theme-static"] = manifestEntry{Outputs: themeDests}
 
 	t.Mark("copy assets")
 
-	expected := make(map[string]struct{})
-	// Add all the output HTML pages into expected set
-	for _, p := range pages {
-		expected[p.OutputPath] = struct{}{}
-	}
-	// add the collections auto generated listing page
-	for _, c := range collections {
-		if c.Index == nil {
-			expected[filepath.Join(b.destDir, c.Name, "index.html")] = struct{}{}
-		}
-	}
-	// add all the asset destinations being used in build
-	for _, d := range assetDests {
-		expected[d] = struct{}{}
-	}
-	// add all the theme asset destinations being used in build
-	for _, d := range themeDests {
-		expected[d] = struct{}{}
-	}
-
 	// Delete only what the last build wrote that this build no longer produces
-	expectedOutputs, err := b.cleanOrphans(expected)
-	if err != nil {
+	if err := b.cleanOrphans(prev, currManifest); err != nil {
 		return err
 	}
 
-	if err := b.recordDeps(curr, renderedDeps); err != nil {
-		return err
-	}
-
-	if err := b.saveOutputs(expectedOutputs); err != nil {
+	if err := b.recordRenderedDeps(currManifest, renderedDeps); err != nil {
 		return err
 	}
 
@@ -211,8 +188,7 @@ func Build(opts BuildOptions) error {
 
 	// we write the new manifest at the end to preserve
 	// the old manifest in case of an error mid-build
-	// return b.saveManifest(curr)
-	if err := b.saveManifest(curr); err != nil {
+	if err := b.saveManifest(currManifest); err != nil {
 		return err
 	}
 	t.Mark("save manifest")
