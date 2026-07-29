@@ -18,6 +18,7 @@ type Record struct {
 	Duration time.Duration
 }
 
+// NewTimer returns a Timer measuring from now
 func NewTimer() *Timer {
 	now := time.Now()
 	return &Timer{
@@ -27,6 +28,7 @@ func NewTimer() *Timer {
 	}
 }
 
+// Mark records the time elapsed since the last Mark (or NewTimer) under label
 func (t *Timer) Mark(label string) {
 	now := time.Now()
 	newRecord := Record{
@@ -39,6 +41,7 @@ func (t *Timer) Mark(label string) {
 	t.records = append(t.records, newRecord)
 }
 
+// Report writes each phase, its duration, and its share of the total to w
 // Credit to Claude Opus 4.8 (High)
 func (t *Timer) Report(writer io.Writer) {
 	total := time.Since(t.start)

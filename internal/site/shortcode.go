@@ -23,6 +23,8 @@ type shortcodeHelpers struct {
 	assetsDir string
 }
 
+// loadShortcodes parses shortcode templates from the theme and site
+// layouts/shortcodes dirs (site overrides theme) into a Shortcodes set
 func loadShortcodes(themeDir, siteLayoutsDir, contentDir string, md goldmark.Markdown) (*Shortcodes, error) {
 	helpers := shortcodeHelpers{assetsDir: filepath.Join(contentDir, "assets")}
 	set := template.New("shortcodes").Funcs(helpers.funcMap())
@@ -49,6 +51,7 @@ func loadShortcodes(themeDir, siteLayoutsDir, contentDir string, md goldmark.Mar
 	}, nil
 }
 
+// funcMap returns the template functions available to shortcodes
 func (h shortcodeHelpers) funcMap() template.FuncMap {
 	return template.FuncMap{
 		"readDir": h.readDir,
@@ -95,6 +98,9 @@ func groupSubstring(md string, m []int, idx int) string {
 	return md[start:m[2*idx+1]]
 }
 
+// Expand replaces each {{< >}} tag in md with a placeholder token, rendering its
+// HTML into the returned expansion, and returns the asset folders any readDir
+// shortcodes read. Tags inside code fences are left untouched
 func (s *Shortcodes) Expand(md string) (expansion, []string, error) {
 
 	// Early exit if No shortcodes exist
@@ -195,7 +201,7 @@ func (s *Shortcodes) Expand(md string) (expansion, []string, error) {
 
 // render executes the named shortcode template with its parsed params (plus a
 // paired tag's body as .Body) and returns the resulting HTML
-// Since every page get's it's own pvt copy of template set, we have to pass it into the function
+// Since every page gets it's own private copy of template set, we have to pass it into the function
 func (s *Shortcodes) render(set *template.Template, name, rawParams, body string) (string, error) {
 	// we use the private copy of the template set to avoid race conditions
 	// as each shortcode has it's own private seen HashSet
@@ -232,6 +238,8 @@ func (s *Shortcodes) render(set *template.Template, name, rawParams, body string
 	return buf.String(), nil
 }
 
+// Restore swaps the placeholder tokens in html back for their rendered HTML,
+// undoing Expand after goldmark has run
 func (e *expansion) Restore(html string) string {
 	for token, snippet := range e.replacements {
 		// Replace all occurences of <p>forgeshortcode00000end</p> with the snippet from the map
@@ -244,6 +252,7 @@ func (e *expansion) Restore(html string) string {
 	return html
 }
 
+// readDir returns the /assets/ URLs of every file under the given asset folder
 func (h shortcodeHelpers) readDir(path string) ([]string, error) {
 	subDirectory := filepath.Base(path)
 	var webPaths []string
@@ -265,7 +274,8 @@ func (h shortcodeHelpers) readDir(path string) ([]string, error) {
 	return webPaths, err
 }
 
-// shortcode key=value parsing
+// parseParams parses a shortcode's raw key=value string into a map (quoted
+// strings, [bracketed] arrays, or bare tokens)
 func parseParams(raw string) (map[string]any, error) {
 
 	// needs to match cols=3 dir=gallery etc etc
@@ -320,6 +330,7 @@ func parseParams(raw string) (map[string]any, error) {
 	return params, nil
 }
 
+// parseQuoted reads a "quoted" value from the start of s, returning it and the rest
 func parseQuoted(s string) (value string, rest string, err error) {
 	// s starts with the opening quote; cut s[1:] at the next quote.
 	// value is the text up to the closing quote, remainder is the rest,
@@ -331,6 +342,7 @@ func parseQuoted(s string) (value string, rest string, err error) {
 	return value, rest, nil
 }
 
+// parseArray reads a [a, b, c] array from the start of s, returning items and the rest
 func parseArray(s string) (value []string, rest string, err error) {
 	// cut at the closing "]" - inner is everything inside the brackets,
 	// rest is what follows; ok is false if there's no "]" (unterminated)
@@ -351,6 +363,8 @@ func parseArray(s string) (value []string, rest string, err error) {
 
 	return items, rest, nil
 }
+
+// parseBare reads a bare whitespace-delimited token from s, returning it and the rest
 func parseBare(s string) (value string, rest string) {
 	i := strings.IndexAny(s, " \t\r\n")
 	if i < 0 {

@@ -117,7 +117,7 @@ func Build(opts BuildOptions) error {
 		}
 		// Get the dirty set of pages + collections
 		changed := diffManifests(prev, curr)
-		depChanged, err := b.depChangedPages(prev)
+		depChanged, err := b.pagesWithChangedDeps(prev)
 		if err != nil {
 			return err
 		}
@@ -298,6 +298,8 @@ func collectContent(root string) ([]string, error) {
 	return res, err
 }
 
+// buildGraph builds the dependency DAG: @config and @theme fan out to every
+// page, and each page feeds its collection's @listing node
 func (b *Builder) buildGraph(pages []Page, collectionsMap map[string]*Collection) (*dag.Graph, error) {
 
 	// create a new graph

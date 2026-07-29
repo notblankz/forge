@@ -16,11 +16,13 @@ type manifestEntry struct {
 	Deps   map[string]string `json:"deps,omitempty"`
 }
 
+// hashBytes returns the hex-encoded SHA-256 of b
 func hashBytes(b []byte) string {
 	sum := sha256.Sum256(b)
 	return fmt.Sprintf("%x", sum)
 }
 
+// hashFile returns the hex-encoded SHA-256 of the file at path
 func hashFile(path string) (string, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -30,6 +32,8 @@ func hashFile(path string) (string, error) {
 	return hashBytes(b), nil
 }
 
+// hashDir fingerprints a directory from its files' path, size, and mtime
+// (metadata only). A missing directory yields an empty fingerprint.
 func hashDir(dir string) (string, error) {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		return "", err
@@ -61,6 +65,8 @@ func hashDir(dir string) (string, error) {
 	return hashBytes([]byte(b.String())), nil
 }
 
+// buildManifestMap builds the current manifest: each page's content hash and
+// output path (deps carried over from prev), plus @config and @theme hashes
 func (b *Builder) buildManifestMap(pages []Page, prev map[string]manifestEntry) (map[string]manifestEntry, error) {
 	manifest := make(map[string]manifestEntry)
 
@@ -172,7 +178,9 @@ func diffManifests(prev, curr map[string]manifestEntry) map[string]struct{} {
 	return changed
 }
 
-func (b *Builder) depChangedPages(prev map[string]manifestEntry) (map[string]struct{}, error) {
+// pagesWithChangedDeps returns pages whose recorded asset-folder deps changed since
+// prev, re-fingerprinting each folder; these seed dirty propagation
+func (b *Builder) pagesWithChangedDeps(prev map[string]manifestEntry) (map[string]struct{}, error) {
 	changed := make(map[string]struct{})
 	cache := make(map[string]string)
 
@@ -196,7 +204,8 @@ func (b *Builder) depChangedPages(prev map[string]manifestEntry) (map[string]str
 	return changed, nil
 }
 
-// recordDeps updates the current manifest's deps field; adding fields on the pages we just rebuilt
+// recordDeps records fresh asset-folder deps for the pages just rebuilt; pages
+// not rebuilt keep the deps carried forward by buildManifestMap
 func (b *Builder) recordDeps(curr map[string]manifestEntry, rendered map[string][]string) error {
 	// Fresh snapshots for the pages we just rebuilt
 	for path, dirs := range rendered {

@@ -17,7 +17,7 @@ type SiteConfig struct {
 	SyntaxHighlighting bool      `toml:"syntax_highlighting"`
 }
 
-// loadConfig reads and parses the site.toml at path into a SiteConfig
+// LoadConfig reads and parses the site.toml at path into a SiteConfig
 func LoadConfig(path string) (SiteConfig, error) {
 	config := SiteConfig{
 		SyntaxHighlighting: true,

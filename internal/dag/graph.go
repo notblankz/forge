@@ -8,6 +8,7 @@ type Graph struct {
 	Edges map[string][]string
 }
 
+// NewGraph returns a Graph with empty node and edge sets.
 func NewGraph() *Graph {
 	return &Graph{
 		Nodes: make(map[string]struct{}),
@@ -15,10 +16,12 @@ func NewGraph() *Graph {
 	}
 }
 
+// AddNode adds nodeID to the node set
 func (g *Graph) AddNode(nodeID string) {
 	g.Nodes[nodeID] = struct{}{}
 }
 
+// AddEdge records a directed edge fromID -> toID; both nodes must already exist
 func (g *Graph) AddEdge(fromID, toID string) error {
 	if _, ok := g.Nodes[fromID]; !ok {
 		return fmt.Errorf("dag: unknown node %q", fromID)

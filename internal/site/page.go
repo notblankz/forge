@@ -102,7 +102,8 @@ func parseFrontmatter(raw []byte) (Frontmatter, error) {
 	return res, nil
 }
 
-// render converts the page's markdown body to HTML and returns it
+// renderPage converts the page's markdown body to HTML, returning the HTML and
+// the asset folders its shortcodes read
 func (b *Builder) renderPage(p Page) ([]byte, []string, error) {
 	type pageView struct {
 		CommonView
