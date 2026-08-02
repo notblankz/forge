@@ -9,7 +9,6 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/notblankz/forge/internal/dag"
 	"github.com/notblankz/forge/internal/timing"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -85,11 +84,11 @@ func Build(opts BuildOptions) error {
 	t.Mark("group collections")
 
 	// Fingerprint this build, and load the last one to compare against
-	prev, err := b.loadManifest()
+	prevManifest, err := b.loadManifest()
 	if err != nil {
 		return err
 	}
-	currManifest, err := b.buildManifestMap(pages, collections, prev)
+	currManifest, err := b.buildManifestMap(pages, collections, prevManifest)
 	if err != nil {
 		return err
 	}
@@ -100,8 +99,19 @@ func Build(opts BuildOptions) error {
 	var dirtyPages []Page
 	var dirtyCollections []*Collection
 
-	if prev == nil {
-		// Since no previous manifest exists we do a cold rebuild
+	rebuildAll := prevManifest == nil
+
+	var changed map[string]struct{}
+	if !rebuildAll {
+		// Get the dirty set of pages + collections
+		changed = diffManifests(prevManifest, currManifest)
+		_, configChanged := changed["@config"]
+		_, themeChanged := changed["@theme"]
+		rebuildAll = configChanged || themeChanged
+	}
+
+	if rebuildAll {
+		// cold build, or a universal dep (@config/@theme) changed -> full rebuild
 		dirtyPages = pages
 		for _, c := range collections {
 			dirtyCollections = append(dirtyCollections, c)
@@ -111,13 +121,12 @@ func Build(opts BuildOptions) error {
 		// the previous manifest
 
 		// build the DAG graph
-		g, err := b.buildGraph(pages, collections)
+		g, err := buildGraphFromManifest(prevManifest, currManifest)
 		if err != nil {
 			return err
 		}
-		// Get the dirty set of pages + collections
-		changed := diffManifests(prev, currManifest)
-		depChanged, err := b.pagesWithChangedDeps(prev)
+
+		depChanged, err := b.pagesWithChangedDeps(prevManifest)
 		if err != nil {
 			return err
 		}
@@ -176,7 +185,7 @@ func Build(opts BuildOptions) error {
 	t.Mark("copy assets")
 
 	// Delete only what the last build wrote that this build no longer produces
-	if err := b.cleanOrphans(prev, currManifest); err != nil {
+	if err := b.cleanOrphans(prevManifest, currManifest); err != nil {
 		return err
 	}
 
@@ -272,48 +281,4 @@ func collectContent(root string) ([]string, error) {
 	})
 
 	return res, err
-}
-
-// buildGraph builds the dependency DAG: @config and @theme fan out to every
-// page, and each page feeds its collection's @listing node
-func (b *Builder) buildGraph(pages []Page, collectionsMap map[string]*Collection) (*dag.Graph, error) {
-
-	// create a new graph
-	g := dag.NewGraph()
-
-	// add the default node for site.toml and the entire theme directory as a whole
-	g.AddNode("@config")
-	g.AddNode("@theme")
-
-	// Each page becomes a node and is joined to the site.toml (@config)
-	// since if the @config changes every page is dirtied
-	for _, page := range pages {
-		g.AddNode(page.Path)
-		if err := g.AddEdge("@config", page.Path); err != nil {
-			return nil, err
-		}
-		if err := g.AddEdge("@theme", page.Path); err != nil {
-			return nil, err
-		}
-	}
-
-	// A collection's auto-generated listing (@listing:<name>) is its own node,
-	// rebuilt whenever any page it lists changes (it shows their titles/dates)
-	// Collections with a custom index.md have no auto-listing, so skip them
-	for collectionName, collection := range collectionsMap {
-		if collection.Index != nil {
-			continue
-		}
-		collectionID := "@listing:" + collectionName
-		g.AddNode(collectionID)
-		for _, page := range collection.Pages {
-			if err := g.AddEdge(page.Path, collectionID); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	// Now we have all the files added to the graph as Nodes
-
-	return g, nil
 }

@@ -4,15 +4,17 @@ import "fmt"
 
 type Graph struct {
 	// We use a map with value as empty struct to simulate HashSets in Go
-	Nodes map[string]struct{}
-	Edges map[string][]string
+	Nodes      map[string]struct{}
+	Edges      map[string][]string // Edges[A] = what A depends on
+	Dependents map[string][]string // Dependents[B] = what depends on B
 }
 
 // NewGraph returns a Graph with empty node and edge sets.
 func NewGraph() *Graph {
 	return &Graph{
-		Nodes: make(map[string]struct{}),
-		Edges: make(map[string][]string),
+		Nodes:      make(map[string]struct{}),
+		Edges:      make(map[string][]string),
+		Dependents: make(map[string][]string),
 	}
 }
 
@@ -22,14 +24,17 @@ func (g *Graph) AddNode(nodeID string) {
 }
 
 // AddEdge records a directed edge fromID -> toID; both nodes must already exist
-func (g *Graph) AddEdge(fromID, toID string) error {
-	if _, ok := g.Nodes[fromID]; !ok {
-		return fmt.Errorf("dag: unknown node %q", fromID)
+func (g *Graph) AddEdge(dependent, dependency string) error {
+	if _, ok := g.Nodes[dependent]; !ok {
+		return fmt.Errorf("dag: unknown node %q", dependent)
 	}
-	if _, ok := g.Nodes[toID]; !ok {
-		return fmt.Errorf("dag: unknown node %q", toID)
+	if _, ok := g.Nodes[dependency]; !ok {
+		return fmt.Errorf("dag: unknown node %q", dependency)
 	}
-	g.Edges[fromID] = append(g.Edges[fromID], toID)
+	// Make an edge from Dependent -> Dependency
+	g.Edges[dependent] = append(g.Edges[dependent], dependency)
+	// Make an edge from Dependency -> Dependent
+	g.Dependents[dependency] = append(g.Dependents[dependency], dependent)
 	return nil
 }
 
@@ -50,7 +55,7 @@ func (g *Graph) Dirty(seeds map[string]struct{}) map[string]struct{} {
 		poppedNodeID := queue[0]
 		queue = queue[1:]
 
-		dirtyChildren := g.Edges[poppedNodeID]
+		dirtyChildren := g.Dependents[poppedNodeID]
 		for _, child := range dirtyChildren {
 			if _, ok := visited[child]; !ok {
 				visited[child] = struct{}{}

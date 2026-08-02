@@ -8,12 +8,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/notblankz/forge/internal/dag"
 )
 
 type manifestEntry struct {
 	Hash    string            `json:"hash,omitempty"`
 	Outputs []string          `json:"outputs,omitempty"`
 	Deps    map[string]string `json:"deps,omitempty"`
+	Edges   []string          `json:"edges,omitempty"`
 }
 
 // hashBytes returns the hex-encoded SHA-256 of b
@@ -117,13 +120,43 @@ func (b *Builder) buildManifestMap(pages []Page, collections map[string]*Collect
 	// This takes care of the auto-generated listings
 	for name, c := range collections {
 		if c.Index == nil {
+			// Collect all the pages this collection lists
+			members := make([]string, len(c.Pages))
+			for i, p := range c.Pages {
+				members[i] = p.Path
+			}
+			// Put them as edges in the manifest entry
 			manifest["@listing:"+name] = manifestEntry{
 				Outputs: []string{filepath.Join(b.destDir, name, "index.html")},
+				Edges:   members,
 			}
 		}
 	}
 
 	return manifest, nil
+}
+
+func buildGraphFromManifest(prev, curr map[string]manifestEntry) (*dag.Graph, error) {
+	// Create a new graph
+	g := dag.NewGraph()
+
+	// iterate over both curr and prev manifest to build a Union Graph
+	for _, manifest := range []map[string]manifestEntry{prev, curr} {
+		for id, entry := range manifest {
+			// Add new node for every ID in manifest
+			g.AddNode(id)
+
+			// Add a Dependency Node to the graph
+			// Add a edge from ID -> Dependency
+			for _, dep := range entry.Edges {
+				g.AddNode(dep)
+				if err := g.AddEdge(id, dep); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	return g, nil
 }
 
 // loadManifest unmarshals the saved .forge-manifest.json (if any)
@@ -198,7 +231,7 @@ func (b *Builder) pagesWithChangedDeps(prev map[string]manifestEntry) (map[strin
 			nowSnapshot, ok := cache[dir]
 			if !ok {
 				var err error
-				nowSnapshot, err := hashDir(filepath.Join(b.contentDir, dir))
+				nowSnapshot, err = hashDir(filepath.Join(b.contentDir, dir))
 				if err != nil {
 					return nil, err
 				}
