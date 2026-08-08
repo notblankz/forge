@@ -7,22 +7,31 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-// BuildCtx carries the per-build state every builder shares
-// mu: mutex
-// results: is a memo which allows each node to run only once
-// inputs: is a map of node -> dependencies it uses
-// sf: dedupes concurrent builds of the same key
+// BuildCtx carries the per-build state shared by every builder.
+//
+//	prevManifest         last build's manifest - the source for reusing clean nodes
+//	dirtySet             nodes that must rebuild this run
+//	mu                   guards resultOf, builtManifestEntries, inputsOf
+//	resultOf             memo of each resolved node's Result (built or reused) — build-once
+//	builtManifestEntries fresh manifest entries for nodes that were actually rebuilt
+//	inputsOf             node -> the deps it Needed (the graph, recorded by Need)
+//	sf                   dedupes concurrent builds of the same key
 type BuildCtx struct {
-	mu      sync.Mutex
-	results map[string]Result
-	inputs  map[string]map[string]struct{}
-	sf      singleflight.Group
+	prevManifest         Manifest
+	dirtySet             map[string]struct{}
+	mu                   sync.Mutex
+	resultOf             map[string]Result
+	builtManifestEntries map[string]ManifestEntry
+	inputsOf             map[string]map[string]struct{}
+	sf                   singleflight.Group
 }
 
-func NewBuildCtx() *BuildCtx {
+func NewBuildCtx(prevManifest Manifest, dirty map[string]struct{}) *BuildCtx {
 	return &BuildCtx{
-		results: map[string]Result{},
-		inputs:  map[string]map[string]struct{}{},
+		prevManifest: prevManifest, dirtySet: dirty,
+		resultOf:             map[string]Result{},
+		builtManifestEntries: map[string]ManifestEntry{},
+		inputsOf:             map[string]map[string]struct{}{},
 	}
 }
 
@@ -30,10 +39,10 @@ func NewBuildCtx() *BuildCtx {
 // and returns its result so that the caller can use it
 func (ctx *BuildCtx) Need(from, dep string) (Result, error) {
 	ctx.mu.Lock()
-	set, ok := ctx.inputs[from]
+	set, ok := ctx.inputsOf[from]
 	if !ok {
 		set = map[string]struct{}{}
-		ctx.inputs[from] = set
+		ctx.inputsOf[from] = set
 	}
 	set[dep] = struct{}{}
 	ctx.mu.Unlock()
@@ -42,26 +51,53 @@ func (ctx *BuildCtx) Need(from, dep string) (Result, error) {
 }
 
 // build produces a node's result, this is done only once per Site build
-// using the memo (results) and singleflight for dedpuing concurrency (sf)
+// using the memo (results) and singleflight for deduping concurrency (sf)
 func (ctx *BuildCtx) build(key string) (Result, error) {
 	ctx.mu.Lock()
-	if r, ok := ctx.results[key]; ok {
+	if r, ok := ctx.resultOf[key]; ok {
 		ctx.mu.Unlock()
 		return r, nil
 	}
 	ctx.mu.Unlock()
 
+	// if the node is clean AND known last build (from prevManifest)
+	// reuse the outputs instead of running the builder
+	if _, isDirty := ctx.dirtySet[key]; !isDirty {
+		if entry, ok := ctx.prevManifest[key]; ok {
+			r := Result{Outputs: entry.Outputs}
+			ctx.mu.Lock()
+			ctx.resultOf[key] = r
+			ctx.mu.Unlock()
+			return r, nil
+		}
+	}
+
+	// dirty or brand new nodes are built with a single flight call
+	// and their ManifestEntry is assembled here and added to builtEntries
 	v, err, _ := ctx.sf.Do(key, func() (any, error) {
 		b, ok := builderFor(key)
 		if !ok {
-			return Result{}, fmt.Errorf("engine: no builder registered for %q", key)
+			return Result{}, fmt.Errorf("engine: no builder for %q", key)
 		}
+
 		r, err := b.Build(ctx, key)
 		if err != nil {
 			return Result{}, err
 		}
+
+		h, err := b.Hash(key)
+		if err != nil {
+			return Result{}, err
+		}
+
 		ctx.mu.Lock()
-		ctx.results[key] = r
+		ctx.resultOf[key] = r
+		ctx.builtManifestEntries[key] = ManifestEntry{
+			Kind:    kindOf(key),
+			Hash:    h,
+			Inputs:  flatten(ctx.inputsOf[key]),
+			Outputs: r.Outputs,
+		}
 		ctx.mu.Unlock()
 		return r, nil
 	})
@@ -70,21 +106,13 @@ func (ctx *BuildCtx) build(key string) (Result, error) {
 		return Result{}, err
 	}
 
-	return v.(Result), err
+	return v.(Result), nil
 }
 
-// Inputs returns the recorded dependency edges of every node, which is
-// then fed into the manifest for storing state
-func (ctx *BuildCtx) Inputs() map[string][]string {
-	ctx.mu.Lock()
-	defer ctx.mu.Unlock()
-	out := map[string][]string{}
-
-	for from, set := range ctx.inputs {
-		for dep := range set {
-			out[from] = append(out[from], dep)
-		}
+func flatten(set map[string]struct{}) []string {
+	out := make([]string, 0, len(set))
+	for k := range set {
+		out = append(out, k)
 	}
-
 	return out
 }
