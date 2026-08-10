@@ -1,11 +1,56 @@
 package site
 
 import (
+	"errors"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/notblankz/forge/internal/engine"
 )
+
+// @assets - node which mirrors content/assets to dest/assets
+type assetsNode struct {
+	contentDir string
+	destDir    string
+}
+
+func (a assetsNode) Hash(string) (string, error) {
+	h, err := engine.HashDir(filepath.Join(a.contentDir, "assets"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+	return h, nil
+}
+
+func (a assetsNode) Build(*engine.BuildCtx, string) (engine.Result, error) {
+	dests, err := copyTree(filepath.Join(a.contentDir, "assets"), a.contentDir, a.destDir)
+	return engine.Result{
+		Outputs: dests,
+	}, err
+}
+
+// @theme-static - node that mirrors theme's static into dist/
+type themeStaticNode struct {
+	themeDir string
+	destDir  string
+}
+
+func (t themeStaticNode) Hash(string) (string, error) {
+	h, err := engine.HashDir(filepath.Join(t.themeDir, "static"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+	return h, err
+}
+
+func (t themeStaticNode) Build(*engine.BuildCtx, string) (engine.Result, error) {
+	dests, err := copyTree(filepath.Join(t.themeDir, "static"), t.themeDir, t.destDir)
+	return engine.Result{
+		Outputs: dests,
+	}, err
+}
 
 // copyTree recursively copies every file under srcDir into destDir, preserving
 // each file's path relative to relBase. A no-op if srcDir doesn't exist, since
@@ -58,42 +103,6 @@ func copyTree(srcDir, relBase, destDir string) ([]string, error) {
 	}
 
 	return dests, nil
-}
-
-// copyAssets mirrors content/assets/ into <dest>/assets/
-func (b *Builder) copyAssets() ([]string, error) {
-	assetsDir := filepath.Join(b.contentDir, "assets")
-	return copyTree(assetsDir, b.contentDir, b.destDir)
-}
-
-// copyThemeAssets mirrors the active theme's static/ directory into dest
-func (b *Builder) copyThemeAssets() ([]string, error) {
-	staticDir := filepath.Join(b.themeDir, "static")
-	return copyTree(staticDir, b.themeDir, b.destDir)
-}
-
-// cleanOrphans removes files the previous build wrote to dist/ that the current
-// build no longer produces (deleted pages, removed assets, renames). It diffs
-// every node's Outputs across the two manifests and deletes the difference;
-// files already gone are ignored
-func (b *Builder) cleanOrphans(prev, curr map[string]manifestEntry) error {
-	kept := make(map[string]struct{})
-	for _, e := range curr {
-		for _, out := range e.Outputs {
-			kept[out] = struct{}{}
-		}
-	}
-
-	for _, e := range prev {
-		for _, out := range e.Outputs {
-			if _, ok := kept[out]; !ok {
-				if err := os.Remove(out); err != nil && !os.IsNotExist(err) {
-					return err
-				}
-			}
-		}
-	}
-	return nil
 }
 
 // copyFile streams the contents of src into a newly created dest file.

@@ -1,11 +1,15 @@
 package engine
 
-import "strings"
+import (
+	"encoding/json"
+	"strings"
+)
 
 // Result is whatever a Builder produces
 type Result struct {
-	Outputs []string // files writted under dist/
-	Data    any      // optional payload for callers
+	Outputs []string        // files writted under dist/
+	Data    any             // optional payload for callers
+	Meta    json.RawMessage // small serialable facts, persister and reused across builds
 }
 
 // Builder knows how to fingerprint and (re)build one kind of node
@@ -21,16 +25,20 @@ func Register(kind string, b Builder) {
 	registry[kind] = b
 }
 
-// kindOf derives a node's kind from it's key
+// kindOf: "@page:content/x.md" -> "@page";  "@config" -> "@config"
 func kindOf(key string) string {
-	if strings.HasPrefix(key, "@") {
-		if i := strings.IndexByte(key, ':'); i >= 0 {
-			return key[:i]
-		}
-		return key
+	if before, _, ok := strings.Cut(key, ":"); ok {
+		return before
 	}
+	return key
+}
 
-	return "page"
+// NodeID returns the part after the kind: "@page:content/x.md" -> "content/x.md";
+func NodeID(key string) string {
+	if _, after, ok := strings.Cut(key, ":"); ok {
+		return after
+	}
+	return ""
 }
 
 func builderFor(key string) (Builder, bool) {

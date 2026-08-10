@@ -12,7 +12,7 @@ import (
 //	prevManifest         last build's manifest - the source for reusing clean nodes
 //	dirtySet             nodes that must rebuild this run
 //	mu                   guards resultOf, builtManifestEntries, inputsOf
-//	resultOf             memo of each resolved node's Result (built or reused) — build-once
+//	resultOf             memo of each resolved node's Result (built or reused) - build-once
 //	builtManifestEntries fresh manifest entries for nodes that were actually rebuilt
 //	inputsOf             node -> the deps it Needed (the graph, recorded by Need)
 //	sf                   dedupes concurrent builds of the same key
@@ -61,10 +61,11 @@ func (ctx *BuildCtx) build(key string) (Result, error) {
 	ctx.mu.Unlock()
 
 	// if the node is clean AND known last build (from prevManifest)
-	// reuse the outputs instead of running the builder
+	// reuse the outputs instead of running the builder. If the node has
+	// no previous outputs (Like @config, @theme) make them fall through and build
 	if _, isDirty := ctx.dirtySet[key]; !isDirty {
-		if entry, ok := ctx.prevManifest[key]; ok {
-			r := Result{Outputs: entry.Outputs}
+		if entry, ok := ctx.prevManifest[key]; ok && len(entry.Outputs) > 0 {
+			r := Result{Outputs: entry.Outputs, Meta: entry.Meta}
 			ctx.mu.Lock()
 			ctx.resultOf[key] = r
 			ctx.mu.Unlock()
@@ -97,6 +98,7 @@ func (ctx *BuildCtx) build(key string) (Result, error) {
 			Hash:    h,
 			Inputs:  flatten(ctx.inputsOf[key]),
 			Outputs: r.Outputs,
+			Meta:    r.Meta,
 		}
 		ctx.mu.Unlock()
 		return r, nil

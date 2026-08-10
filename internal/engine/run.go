@@ -4,28 +4,37 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
+	"os"
 	"runtime"
 
 	"golang.org/x/sync/errgroup"
 )
 
-// Run performs one incremental build and returns the manifest to persist.
-// Four phases: (1) re-fingerprint every known node into a "refreshed" snapshot,
-// (2) diff it against prevManifest to get the dirty set, (3) rebuild only the
-// dirty targets (clean deps are served from cache), (4) assemble the new
-// manifest from the reused + freshly built nodes. `targets` are the caller's
-// output-producing nodes (pages, listings); their dependencies are discovered
-// on the fly via Need and never listed here
-func Run(prevManifest Manifest, targets []string) (Manifest, error) {
+// Run performs one incremental build and returns the manifest to persist
+// There are Four phases:
+//
+//	(1) re-fingerprint every known node into a "refreshed" snapshot,
+//	(2) diff it against prevManifest to get the dirty set
+//	(3) rebuild only the dirty targets (clean deps are served from cache)
+//	(4) assemble the new manifest from the reused + freshly built nodes.
+//		`targets` are the caller's output-producing nodes (pages, listings);
+//		their dependencies are discovered on the fly via Need and never listed here
+func Run(prevManifest Manifest, targets []string, mark func(string)) (Manifest, error) {
+
+	markStep := func(label string) {
+		if mark != nil {
+			mark(label)
+		}
+	}
+
 	if prevManifest == nil {
 		prevManifest = Manifest{}
 	}
 
 	// copy the prevManifest into the refreshedManifest snapshot
 	refreshedManifest := Manifest{}
-	for key, entry := range prevManifest {
-		refreshedManifest[key] = entry
-	}
+	maps.Copy(refreshedManifest, prevManifest)
 
 	// nodesToRecheck is the set of nodes we have to re-check for changes
 	// nodesToRecheck includes all nodes in prevManifest and the targets
@@ -63,7 +72,11 @@ func Run(prevManifest Manifest, targets []string) (Manifest, error) {
 		refreshedManifest[key] = manifestEntry
 	}
 
+	markStep("hash refresh")
+
 	dirty := DirtySet(prevManifest, refreshedManifest)
+
+	markStep("dirty set")
 
 	// Rebuild all the target nodes, skipping any non dirty nodes
 	// ANy dependencies that the Node might need is pulled in through `Need`
@@ -97,5 +110,34 @@ func Run(prevManifest Manifest, targets []string) (Manifest, error) {
 		currManifest[key] = entry
 	}
 
+	markStep("build")
+
+	if err := cleanOrphans(prevManifest, currManifest); err != nil {
+		return nil, err
+	}
+
+	markStep("clean orphans")
+
 	return currManifest, nil
+}
+
+func cleanOrphans(prev, curr Manifest) error {
+	kept := map[string]struct{}{}
+
+	for _, entry := range curr {
+		for _, output := range entry.Outputs {
+			kept[output] = struct{}{}
+		}
+	}
+
+	for _, entry := range prev {
+		for _, output := range entry.Outputs {
+			if _, ok := kept[output]; !ok {
+				if err := os.Remove(output); err != nil && !errors.Is(err, fs.ErrNotExist) {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }

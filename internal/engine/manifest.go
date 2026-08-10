@@ -1,12 +1,20 @@
 package engine
 
-import "github.com/notblankz/forge/internal/dag"
+import (
+	"encoding/json"
+	"errors"
+	"io/fs"
+	"os"
+
+	"github.com/notblankz/forge/internal/dag"
+)
 
 type ManifestEntry struct {
-	Kind    string   `json:"kind"`
-	Hash    string   `json:"hash,omitempty"`
-	Inputs  []string `json:"inputs,omitempty"`
-	Outputs []string `json:"outputs,omitempty"`
+	Kind    string          `json:"kind"`
+	Hash    string          `json:"hash,omitempty"`
+	Inputs  []string        `json:"inputs,omitempty"`
+	Outputs []string        `json:"outputs,omitempty"`
+	Meta    json.RawMessage `json:"meta,omitempty"`
 }
 
 type Manifest map[string]ManifestEntry
@@ -52,4 +60,28 @@ func graphFrom(prev, curr Manifest) *dag.Graph {
 // indirectly or directly depends on them, walked through the inputs graph
 func DirtySet(prev, curr Manifest) map[string]struct{} {
 	return graphFrom(prev, curr).Dirty(changedSet(prev, curr))
+}
+
+func LoadManifest(path string) (Manifest, error) {
+	content, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	var m Manifest
+	if err := json.Unmarshal(content, &m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func SaveManifest(path string, m Manifest) error {
+	content, err := json.MarshalIndent(m, "", " ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, content, 0644)
 }
