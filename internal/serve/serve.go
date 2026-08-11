@@ -5,7 +5,9 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -29,7 +31,7 @@ func Start(opts Config) error {
 
 	go func() {
 		fileServer := http.FileServer(http.Dir(paths.Dest))
-		http.Handle("/", fileServer)
+		http.Handle("/", cleanURLHandler(paths.Dest, fileServer))
 		fmt.Printf("\n  forge dev server\n")
 		fmt.Printf("  -> local:    http://localhost:%d\n", opts.Port)
 		fmt.Printf("  -> watching: %s, %s, %s\n\n", paths.Content, paths.Layouts, site.ThemesRoot)
@@ -120,4 +122,28 @@ func rebuild(opts site.BuildOptions) {
 		return
 	}
 	fmt.Printf("rebuilt in %s\n", time.Since(start))
+}
+
+// cleanURLHandler serves extensionless clean URLs (/blog/post) from flat files
+// (blog/post.html). Directory requests (/, /blog/) and real files (assets)
+// fall through to the file server untouched
+func cleanURLHandler(root string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		if path.Ext(p) == "" && !strings.HasSuffix(p, "/") {
+			full := filepath.Join(root, filepath.FromSlash(p))
+			if _, err := os.Stat(full); err != nil { // not already a real file/dir
+				if html := full + ".html"; fileExists(html) {
+					http.ServeFile(w, r, html)
+					return
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func fileExists(name string) bool {
+	st, err := os.Stat(name)
+	return err == nil && !st.IsDir()
 }

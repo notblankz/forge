@@ -213,12 +213,11 @@ func (p *Page) write(content []byte) error {
 	return os.WriteFile(p.OutputPath, content, 0644)
 }
 
-// resolvePaths sets the page's output path and URL, mapping the source path
-// (relative to contentDir) into destDir using clean-URL layout:
+// resolvePaths sets the page's output path and URL
 //
 //	home.md       : dist/index.html            (/)
-//	resume.md     : dist/resume/index.html     (/resume/)
-//	blog/post.md  : dist/blog/post/index.html  (/blog/post/)
+//	resume.md     : dist/resume.html           (/resume)
+//	blog/post.md  : dist/blog/post.html        (/blog/post/)
 //	blog/index.md : dist/blog/index.html       (/blog/)
 func (p *Page) resolvePaths(contentDir, destDir string) error {
 	rel, err := filepath.Rel(contentDir, p.Path)
@@ -228,26 +227,29 @@ func (p *Page) resolvePaths(contentDir, destDir string) error {
 
 	dir := filepath.Dir(rel)
 	base := strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel))
+	slashDir := filepath.ToSlash(dir)
 
 	var outRel string
 	switch base {
 	case "home":
 		outRel = "index.html"
+		p.URL = "/"
 	case "index":
 		outRel = filepath.Join(dir, "index.html")
+		if slashDir == "." {
+			p.URL = "/"
+		} else {
+			p.URL = "/" + slashDir + "/"
+		}
 	default:
-		outRel = filepath.Join(dir, base, "index.html")
+		outRel = filepath.Join(dir, base+".html")
+		if slashDir == "." {
+			p.URL = "/" + base
+		} else {
+			p.URL = "/" + slashDir + "/" + base
+		}
 	}
 
 	p.OutputPath = filepath.Join(destDir, outRel)
-
-	// Remove index.html and keep only dir/base/ as the URL
-	urlPath := filepath.ToSlash(filepath.Dir(outRel))
-	if urlPath == "." {
-		p.URL = "/"
-	} else {
-		p.URL = "/" + urlPath + "/"
-	}
-
 	return nil
 }
