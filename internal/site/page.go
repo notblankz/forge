@@ -46,7 +46,7 @@ func (p pageNode) Build(ctx *engine.BuildCtx, key string) (engine.Result, error)
 	}
 
 	// expand shortcodes + markdown fragment + record asset folder this page readDir'ed
-	exp, dirs, err := th.shortcodes.Expand(page.Body)
+	exp, dirs, err := th.shortcodes.Expand(ctx, key, page.Body)
 	if err != nil {
 		return engine.Result{}, err
 	}

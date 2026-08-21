@@ -55,6 +55,7 @@ type SiteConfig struct {
 	Nav                []NavItem `toml:"nav"`
 	Social             []NavItem `toml:"social"`
 	SyntaxHighlighting bool      `toml:"syntax_highlighting"`
+	ImageSizes         []int     `toml:"image_sizes"`
 }
 
 // LoadConfig reads and parses the site.toml at path into a SiteConfig

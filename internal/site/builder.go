@@ -64,7 +64,7 @@ func Build(opts BuildOptions) error {
 		}
 	}
 
-	registerNodes(paths, themeDir, listingMembers)
+	registerNodes(paths, themeDir, listingMembers, cfg.ImageSizes)
 
 	t.Mark("enumerate content")
 
