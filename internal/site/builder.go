@@ -64,7 +64,12 @@ func Build(opts BuildOptions) error {
 		}
 	}
 
-	registerNodes(paths, themeDir, listingMembers, cfg.ImageSizes())
+	baseURL := cfg.BaseURL()
+	if baseURL != "" {
+		targets = append(targets, "@sitemap")
+	}
+
+	registerNodes(paths, themeDir, listingMembers, cfg.ImageSizes(), baseURL, contentPaths)
 
 	t.Mark("enumerate content")
 

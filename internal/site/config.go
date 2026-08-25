@@ -2,6 +2,7 @@ package site
 
 import (
 	"os"
+	"strings"
 
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
 	"github.com/notblankz/forge/internal/engine"
@@ -80,6 +81,11 @@ func (c SiteConfig) ImageSizes() []int {
 	}
 
 	return sizes
+}
+
+func (c SiteConfig) BaseURL() string {
+	s, _ := c["base_url"].(string)
+	return strings.TrimSuffix(s, "/")
 }
 
 // LoadConfig reads and parses the site.yaml at path into SiteConfig
