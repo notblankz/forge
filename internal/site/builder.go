@@ -27,7 +27,7 @@ func Build(opts BuildOptions) error {
 	if err != nil {
 		return err
 	}
-	themeDir := ResolveThemeDir(paths.Root, cfg.Theme)
+	themeDir := ResolveThemeDir(paths.Root, cfg.Theme())
 
 	contentPaths, err := collectContent(paths.Content)
 	if err != nil {
@@ -64,7 +64,7 @@ func Build(opts BuildOptions) error {
 		}
 	}
 
-	registerNodes(paths, themeDir, listingMembers, cfg.ImageSizes)
+	registerNodes(paths, themeDir, listingMembers, cfg.ImageSizes())
 
 	t.Mark("enumerate content")
 

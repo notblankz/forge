@@ -15,7 +15,7 @@ type SitePaths struct {
 	Content string // <root>/content   - markdown pages and assets/
 	Layouts string // <root>/layouts   - site-level template overrides
 	Dest    string // build output
-	Config  string // <root>/site.toml
+	Config  string // <root>/site.yaml
 }
 
 // NewSitePaths derives the site layout from siteRoot. destOverride, when
@@ -31,6 +31,6 @@ func NewSitePaths(siteRoot, destOverride string) SitePaths {
 		Content: filepath.Join(siteRoot, "content"),
 		Layouts: filepath.Join(siteRoot, "layouts"),
 		Dest:    dest,
-		Config:  filepath.Join(siteRoot, "site.toml"),
+		Config:  filepath.Join(siteRoot, "site.yaml"),
 	}
 }

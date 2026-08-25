@@ -52,12 +52,12 @@ func Start(opts Config) error {
 		return err
 	}
 
-	themeDir := site.ResolveThemeDir(paths.Root, config.Theme)
+	themeDir := site.ResolveThemeDir(paths.Root, config.Theme())
 
 	if err := watchDirs(watcher, paths.Content, paths.Layouts, themeDir); err != nil {
 		return err
 	}
-	watcher.Add(filepath.Join(paths.Root, "site.toml"))
+	watcher.Add(filepath.Join(paths.Root, "site.yaml"))
 
 	var debounce *time.Timer
 	for {
