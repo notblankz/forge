@@ -67,18 +67,17 @@ func (p pageNode) Build(ctx *engine.BuildCtx, key string) (engine.Result, error)
 
 	// render through the theme template
 	type pageView struct {
-		CommonView
-		Page
-		Content template.HTML
+		Site        SiteConfig
+		Frontmatter Frontmatter
+		URL         string
+		Content     template.HTML
 	}
 
 	view := pageView{
-		CommonView: CommonView{
-			Site:      cfg.config,
-			PageTitle: page.Frontmatter.Title,
-		},
-		Page:    page,
-		Content: template.HTML(content),
+		Site:        cfg.config,
+		Frontmatter: page.Frontmatter,
+		URL:         page.URL,
+		Content:     template.HTML(content),
 	}
 
 	var out bytes.Buffer
@@ -92,12 +91,7 @@ func (p pageNode) Build(ctx *engine.BuildCtx, key string) (engine.Result, error)
 	}
 
 	// serialise the Page metadata
-	meta, err := json.Marshal(PageMeta{
-		Title:       page.Frontmatter.Title,
-		Date:        page.Frontmatter.Date,
-		Description: page.Frontmatter.Description,
-		URL:         page.URL,
-	})
+	meta, err := json.Marshal(page.Metadata())
 	if err != nil {
 		return engine.Result{}, err
 	}
@@ -109,32 +103,87 @@ func (p pageNode) Build(ctx *engine.BuildCtx, key string) (engine.Result, error)
 }
 
 // Page Node Helpers
+
+// -- Frontmatter --
+
+// Frontmatter is a page's full front matter, generic so any field is reachable
+// in templates as .Frontmatter.<key>. Typed accessors cover only what forge reads
+type Frontmatter map[string]any
+
+func (f Frontmatter) Title() string {
+	s, _ := f["title"].(string)
+	return s
+}
+
+func (f Frontmatter) Template() string {
+	s, _ := f["template"].(string)
+	return s
+}
+
+func (f Frontmatter) Date() time.Time {
+	switch v := f["date"].(type) {
+	case time.Time:
+		return v
+	case string:
+		for _, layout := range []string{time.RFC3339, "2006-01-02"} {
+			if t, err := time.Parse(layout, v); err == nil {
+				return t
+			}
+		}
+	}
+	return time.Time{}
+}
+
+// -- listing metadata --
+
+// PageMetadata is the flat, listing-facing metadata: title/date/url plus opted-in
+// fields. Stored in Meta and handed to listings — never used to render a page
+type PageMetadata map[string]any
+
+// UnmarshalJSON decodes persisted metadata and restores the date, which JSON
+// stores as a string - so listings can call .Format/.IsZero on it directly
+func (m *PageMetadata) UnmarshalJSON(data []byte) error {
+	raw := map[string]any{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if s, ok := raw["date"].(string); ok {
+		if t, err := time.Parse(time.RFC3339, s); err == nil {
+			raw["date"] = t
+		}
+	}
+	*m = raw
+	return nil
+}
+
+// -- internal page representation --
 type Page struct {
 	Path        string
 	Body        string
 	OutputPath  string
-	Frontmatter Frontmatter
 	URL         string // holds the web path of the page
-	Hash        string
+	Frontmatter Frontmatter
 }
 
-type PageMeta struct {
-	Title       string
-	Date        time.Time
-	Description string
-	URL         string
-}
+func (p Page) Metadata() PageMetadata {
+	m := PageMetadata{
+		"title": p.Frontmatter.Title(),
+		"date":  p.Frontmatter.Date(),
+		"url":   p.URL,
+	}
 
-type Frontmatter struct {
-	Date        time.Time `taml:"date"`
-	Title       string    `yaml:"title"`
-	Description string    `yaml:"description"`
-	Template    string    `yaml:"template"`
-}
+	names, _ := p.Frontmatter["metadata"].([]any)
+	for _, n := range names {
+		key, ok := n.(string)
+		if !ok || key == "title" || key == "date" || key == "url" {
+			continue
+		}
+		if v, ok := p.Frontmatter[key]; ok {
+			m[key] = v
+		}
+	}
 
-type CommonView struct {
-	Site      SiteConfig
-	PageTitle string // text for the <title> tag, decided per view
+	return m
 }
 
 // loadPage reads a content file and assembles it into a Page,
@@ -217,7 +266,7 @@ func (p *Page) write(content []byte) error {
 //
 //	home.md       : dist/index.html            (/)
 //	resume.md     : dist/resume.html           (/resume)
-//	blog/post.md  : dist/blog/post.html        (/blog/post/)
+//	blog/post.md  : dist/blog/post.html        (/blog/post)
 //	blog/index.md : dist/blog/index.html       (/blog/)
 func (p *Page) resolvePaths(contentDir, destDir string) error {
 	rel, err := filepath.Rel(contentDir, p.Path)

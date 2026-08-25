@@ -124,8 +124,8 @@ func mergeOverrides(theme *template.Template, dir string) (*template.Template, e
 // 3) generic "page" fallback
 // NOTE: existence of the template is checked by ExecuteTemplate at call time
 func selectTemplate(theme *template.Template, page Page) string {
-	if page.Frontmatter.Template != "" {
-		name := strings.TrimSuffix(page.Frontmatter.Template, ".html")
+	if page.Frontmatter.Template() != "" {
+		name := strings.TrimSuffix(page.Frontmatter.Template(), ".html")
 		if theme.Lookup(name) != nil {
 			return name
 		}

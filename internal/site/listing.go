@@ -42,13 +42,13 @@ func (l listingNode) Build(ctx *engine.BuildCtx, key string) (engine.Result, err
 	th := themeRes.Data.(themeData)
 
 	// members: record the dependency edge + read each page's display metadata
-	var pages []PageMeta
+	var pages []PageMetadata
 	for _, path := range l.members[name] {
 		pageRes, err := ctx.Need(key, "@page:"+path)
 		if err != nil {
 			return engine.Result{}, err
 		}
-		var pm PageMeta
+		var pm PageMetadata
 		if err := json.Unmarshal(pageRes.Meta, &pm); err != nil {
 			return engine.Result{}, err
 		}
@@ -56,16 +56,13 @@ func (l listingNode) Build(ctx *engine.BuildCtx, key string) (engine.Result, err
 	}
 
 	type listingView struct {
-		CommonView
+		Site  SiteConfig
 		Name  string
-		Pages []PageMeta
+		Pages []PageMetadata
 	}
 
 	view := listingView{
-		CommonView: CommonView{
-			Site:      cfg.config,
-			PageTitle: name,
-		},
+		Site:  cfg.config,
 		Name:  name,
 		Pages: pages,
 	}
