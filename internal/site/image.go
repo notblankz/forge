@@ -41,7 +41,7 @@ func (i imageNode) Hash(key string) (string, error) {
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s|%d|%d\n", engine.NodeID(key), fi.Size(), fi.ModTime().UnixNano())
+	fmt.Fprintf(&b, "%s|%d|%d|%v\n", engine.NodeID(key), fi.Size(), fi.ModTime().UnixNano(), i.sizes)
 
 	return engine.HashBytes([]byte(b.String())), nil
 }
