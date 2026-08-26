@@ -5,7 +5,7 @@
 
 # Docs site folder
 .forge-manifest.json
-docs/dist/
+/docs/dist/*
 
 # Host CLI state
 .netlify/
