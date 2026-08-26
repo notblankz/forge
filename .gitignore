@@ -1,15 +1,11 @@
 # Binaries
 /bin/
 *.exe
+/forge
 
-# test site folder
-/test-site/
+# Docs site folder
+.forge-manifest.json
+docs/dist/
 
-# test dist folder
-/dist/
-
-# bench folder
-/bench/
-
-# test theme folder
-/themes/
+# Host CLI state
+.netlify/
