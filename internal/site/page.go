@@ -204,6 +204,11 @@ func loadPage(path, contentDir, destDir string) (Page, error) {
 		return Page{}, err
 	}
 
+	if frontmatter.Title() == "" {
+		base := filepath.Base(path)
+		frontmatter["title"] = strings.NewReplacer("-", " ", "_", " ").Replace(strings.TrimSuffix(base, filepath.Ext(base)))
+	}
+
 	page := Page{
 		Path:        path,
 		Body:        body,
