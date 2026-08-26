@@ -1,0 +1,30 @@
+# forge
+
+> forge is a fast, concurrent static site generator written in Go. A site is a folder with three parts: a `site.yaml` config, a `content/` tree of Markdown, and a theme of Go `html/template` files. forge renders each Markdown file to a clean-URL HTML page, auto-generates listing pages for collections, runs an incremental content-hashed build, and writes everything to `dist/`. It ships as a single binary with no runtime dependencies.
+
+Facts to get right before answering questions about forge:
+
+- Config lives in `site.yaml`. Every key is reachable in templates as `.Site.<key>`, lowercase, exactly as written. The only keys forge itself reads are `theme`, `syntax_highlighting`, `image_sizes`, and `base_url`; everything else is yours.
+- Front matter is optional YAML fenced by `---`. Every key is reachable as `.Frontmatter.<key>`, lowercase. Nothing is required to build — forge derives a missing `title` from the filename (`my-first-post.md` becomes `my first post`).
+- Templates use Go's `html/template`. Each layout file wraps its content in `{{ define "<name>" }}…{{ end }}`. A theme must define at least `page` and `listing`.
+- Page templates (`page`, `home`, filename-matched) receive `.Site`, `.Frontmatter`, `.URL`, and `.Content`. The `listing` template receives `.Site`, `.Name`, and `.Pages` (flat entries with `.title`, `.date`, `.url`, plus any `metadata`-opted-in fields).
+- `.date` and `.Frontmatter.date` are real time values: `{{ .date.Format "02 Jan 2006" }}`, `{{ if not .date.IsZero }}`. Write dates unquoted so YAML keeps them as times.
+- URLs are clean and extensionless: `content/about.md` → `/about`; `content/blog/post.md` → `/blog/post`; `home.md`/`index.md` keep `index.html` so folder URLs resolve.
+
+## Docs
+
+- [Overview](https://forge-ssg.netlify.app/): what forge is and how a site fits together.
+- [Getting started](https://forge-ssg.netlify.app/getting-started): install, the smallest site that builds, project structure, and the `build`/`serve` commands.
+- [Configuration](https://forge-ssg.netlify.app/configuration): the `site.yaml` reference — the handful of keys forge reads versus your own arbitrary keys.
+- [Content & front matter](https://forge-ssg.netlify.app/content): what a page is, front-matter types (strings, lists, maps, dates), and the clean-URL mapping.
+- [Collections & listings](https://forge-ssg.netlify.app/collections): how a subfolder becomes a collection, what a listing entry contains, and opting extra fields in with `metadata`.
+- [Themes & templates](https://forge-ssg.netlify.app/themes): the template contract — which template renders a page and the exact data each one receives.
+- [AI theme generation](https://forge-ssg.netlify.app/ai-theme-generation): a paste-in prompt that turns an LLM into a forge theme generator, plus how this llms.txt fits in.
+- [Shortcodes](https://forge-ssg.netlify.app/shortcodes): theme-defined snippets invoked from Markdown, plus the `readDir` and `image` helpers available inside them.
+- [Image optimization](https://forge-ssg.netlify.app/images): the responsive `image_sizes` pipeline and the descriptor returned by `image` (`.Src`, `.Srcset`, `.Width`, `.Height`).
+- [Syntax highlighting](https://forge-ssg.netlify.app/highlighting): server-side, class-based highlighting via Chroma — swap the stylesheet to restyle with no content rebuild.
+- [Builds, CLI & deploy](https://forge-ssg.netlify.app/reference): incremental builds and the manifest, the CLI, the `base_url` sitemap, and deploying `dist/` to any static host.
+
+## Optional
+
+- [GitHub repository](https://github.com/notblankz/forge): source, issues, and releases.
