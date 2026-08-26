@@ -1,0 +1,39 @@
+/* Chroma (class-based) - Catppuccin Mocha.
+   main.css owns the <pre> container; this file only colours tokens. */
+.chroma { background: transparent; color: #cdd6f4; }
+.chroma .err { color: #f38ba8; }
+
+/* comments */
+.chroma .c, .chroma .ch, .chroma .cm, .chroma .c1, .chroma .cs,
+.chroma .cp, .chroma .cpf { color: #6c7086; font-style: italic; }
+
+/* keywords */
+.chroma .k, .chroma .kc, .chroma .kd, .chroma .kn, .chroma .kp, .chroma .kr { color: #cba6f7; }
+.chroma .kt { color: #f9e2af; }
+
+/* operators / punctuation */
+.chroma .o, .chroma .ow { color: #89dceb; }
+.chroma .p { color: #9399b2; }
+
+/* names */
+.chroma .na { color: #f9e2af; }                 /* attribute */
+.chroma .nt { color: #89b4fa; }                 /* html tag */
+.chroma .nf, .chroma .fm { color: #89b4fa; }    /* function */
+.chroma .nc, .chroma .nn { color: #f9e2af; }    /* class / namespace */
+.chroma .nb, .chroma .bp { color: #fab387; }    /* builtin */
+.chroma .nv, .chroma .vc, .chroma .vg, .chroma .vi { color: #cdd6f4; }
+
+/* strings */
+.chroma .s, .chroma .sb, .chroma .sc, .chroma .s1, .chroma .s2, .chroma .se,
+.chroma .sh, .chroma .si, .chroma .sx, .chroma .sr, .chroma .ss, .chroma .dl { color: #a6e3a1; }
+
+/* numbers */
+.chroma .m, .chroma .mb, .chroma .mf, .chroma .mh, .chroma .mi, .chroma .il, .chroma .mo { color: #fab387; }
+
+/* generic / diff */
+.chroma .gd { color: #f38ba8; }
+.chroma .gi { color: #a6e3a1; }
+.chroma .gh { color: #89b4fa; font-weight: bold; }
+.chroma .ge { font-style: italic; }
+.chroma .gs { font-weight: bold; }
+.chroma .ln, .chroma .lnt { color: #6c7086; }

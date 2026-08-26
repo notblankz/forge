@@ -1,0 +1,28 @@
+title: forge docs
+theme: docs
+
+# The sidebar is built from these entries - to add a section, add a page in
+# content/ and a nav entry here.
+nav:
+  - label: Overview
+    url: /
+  - label: Getting started
+    url: /getting-started
+  - label: Configuration
+    url: /configuration
+  - label: Content & front matter
+    url: /content
+  - label: Collections & listings
+    url: /collections
+  - label: Themes & templates
+    url: /themes
+  - label: AI theme generation
+    url: /ai-theme-generation
+  - label: Shortcodes
+    url: /shortcodes
+  - label: Image optimization
+    url: /images
+  - label: Syntax highlighting
+    url: /highlighting
+  - label: Builds, CLI & deploy
+    url: /reference

@@ -1,0 +1,118 @@
+:root{
+  /* Catppuccin Mocha */
+  --bg:#1e1e2e;      /* base    */
+  --panel:#181825;   /* mantle  */
+  --border:#313244;  /* surface0*/
+  --fg:#cdd6f4;      /* text    */
+  --muted:#a6adc8;   /* subtext0*/
+  --accent:#89b4fa;  /* blue    */
+  --code-bg:#11111b; /* crust   */
+  --code-fg:#cdd6f4;
+}
+*{box-sizing:border-box}
+
+/* Thin, minimal scrollbars */
+*{scrollbar-width:thin; scrollbar-color:var(--border) transparent}
+::-webkit-scrollbar{width:10px; height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{
+  background:var(--border); border-radius:8px;
+  border:2px solid transparent; background-clip:padding-box;
+}
+::-webkit-scrollbar-thumb:hover{background:var(--muted); background-clip:padding-box}
+::-webkit-scrollbar-corner{background:transparent}
+
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font:16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent); text-decoration:none}
+a:hover{text-decoration:underline}
+
+.layout{display:flex; align-items:flex-start}
+
+/* Sidebar - a checkbox toggle: forced open on desktop, tap-to-open on mobile. */
+.side{
+  position:sticky; top:0; height:100vh; width:250px; flex:0 0 250px; overflow:auto;
+  padding:22px 20px; border-right:1px solid var(--border); background:var(--panel);
+}
+.side-head{display:flex; align-items:center; justify-content:space-between}
+.brand{font-size:20px; font-weight:700; letter-spacing:-.5px; color:var(--fg)}
+a.brand:hover{text-decoration:none}
+
+/* checkbox state holder: visually hidden but still keyboard-focusable */
+.nav-toggle{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); opacity:0}
+.menu-btn{display:none; cursor:pointer; color:var(--muted); line-height:0}
+.menu-btn:hover{color:var(--fg)}
+.menu-btn .ic{display:block}
+.menu-btn .ic-close{display:none}
+.nav-toggle:focus-visible ~ .side-head .menu-btn{outline:2px solid var(--accent); outline-offset:3px; border-radius:4px}
+
+.tag{color:var(--muted); font-size:13px; margin:6px 0 18px}
+.nav-links{display:block}
+.nav-links a{display:block; color:var(--muted); padding:5px 0; font-size:14.5px}
+.nav-links a:hover{color:var(--fg); text-decoration:none}
+.nav-links a.active{color:var(--accent)}
+
+/* Content */
+main{flex:1 1 auto; min-width:0; padding:48px 40px 120px; display:flex; justify-content:center}
+.content{width:100%; max-width:800px; min-width:0; overflow-wrap:break-word}
+.content h1{font-size:34px; letter-spacing:-1px; margin:.1em 0 .4em}
+.content h2{font-size:23px; letter-spacing:-.4px; margin:2.2em 0 .5em; padding-top:14px; border-top:1px solid var(--border)}
+.content h3{font-size:17px; margin:1.7em 0 .4em}
+.content p,.content li{color:var(--fg)}
+.content ul,.content ol{padding-left:22px}
+.content li{margin:.25em 0}
+.content code{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.88em}
+.content :not(pre)>code{background:var(--code-bg); color:var(--code-fg); padding:.12em .4em; border-radius:4px}
+.content pre{
+  background:var(--code-bg); color:var(--code-fg); padding:16px 18px; border-radius:8px;
+  overflow:auto; border:1px solid var(--border); font-size:14px; line-height:1.55;
+}
+.content pre code{background:none; padding:0; color:inherit; font-size:inherit}
+
+/* Copy button (AI theme generation prompt) */
+.code-wrap{position:relative}
+.code-wrap pre{
+  margin:0; max-height:60vh; padding-top:52px;   /* room for the pinned button */
+}
+.copy-btn{
+  position:absolute; top:10px; left:10px; z-index:2;
+  display:inline-flex; align-items:center; gap:6px;
+  font-family:inherit; font-size:12.5px; font-weight:500; line-height:1;
+  color:var(--muted); background:var(--panel);
+  border:1px solid var(--border); border-radius:6px;
+  padding:7px 11px; cursor:pointer;
+  box-shadow:0 1px 4px rgba(0,0,0,.35);
+  transition:color .12s ease, border-color .12s ease, background .12s ease;
+}
+.copy-btn:hover{color:var(--fg); border-color:var(--muted)}
+.copy-btn:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.copy-btn .copy-ico{display:block; flex:0 0 auto}
+.copy-btn.copied{color:var(--accent); border-color:var(--accent)}
+.content table{border-collapse:collapse; width:100%; margin:1em 0; font-size:14.5px}
+.content th,.content td{border:1px solid var(--border); padding:8px 12px; text-align:left; vertical-align:top}
+.content th{background:var(--panel); font-weight:600}
+.content blockquote{
+  background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--accent);
+  margin:1.2em 0; padding:2px 16px; border-radius:6px;
+}
+.content hr{border:0; border-top:1px solid var(--border); margin:2em 0}
+
+/* Mobile: sidebar becomes a sticky top bar; the hamburger toggles the links. */
+@media(max-width:760px){
+  .layout{flex-direction:column; align-items:stretch}
+  .side{
+    position:sticky; top:0; height:auto; width:100%; flex:none; z-index:10;
+    border-right:none; border-bottom:1px solid var(--border); padding:14px 20px;
+  }
+  .tag{display:none}
+  .menu-btn{display:inline-flex; align-items:center}
+  .nav-links{display:none; margin-top:14px}
+  .nav-toggle:checked ~ .nav-links{display:block}
+  .nav-toggle:checked ~ .side-head .ic-open{display:none}
+  .nav-toggle:checked ~ .side-head .ic-close{display:block}
+  main{padding:28px 20px 80px}
+}

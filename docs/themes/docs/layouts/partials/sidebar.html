@@ -1,0 +1,24 @@
+{{ define "sidebar" }}
+<div class="side">
+  <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="Toggle navigation">
+  <div class="side-head">
+    <a class="brand" href="/">forge</a>
+    <label for="nav-toggle" class="menu-btn">
+      <svg class="ic ic-open" viewBox="0 0 24 24" width="24" height="24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+      <svg class="ic ic-close" viewBox="0 0 24 24" width="24" height="24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/>
+      </svg>
+    </label>
+  </div>
+  <div class="tag">documentation</div>
+  <nav class="nav-links">
+    {{ range .Site.nav }}
+    <a href="{{ .url }}"{{ if eq $.URL .url }} class="active"{{ end }}>{{ .label }}</a>
+    {{ end }}
+  </nav>
+</div>
+{{ end }}

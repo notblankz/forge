@@ -1,0 +1,15 @@
+{{ define "page" }}
+<!doctype html>
+<html lang="en">
+{{ template "head" . }}
+<body>
+  <div class="layout">
+    {{ template "sidebar" . }}
+    <main><article class="content">
+{{ .Content }}
+    </article></main>
+  </div>
+{{ if .Frontmatter.copy_prompt }}<script src="/static/copy-prompt.js" defer></script>{{ end }}
+</body>
+</html>
+{{ end }}
