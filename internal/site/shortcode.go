@@ -2,6 +2,7 @@ package site
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -9,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/notblankz/forge/internal/engine"
 	"github.com/yuin/goldmark"
 )
 
@@ -27,7 +29,7 @@ type shortcodeHelpers struct {
 // layouts/shortcodes dirs (site overrides theme) into a Shortcodes set
 func loadShortcodes(themeDir, siteLayoutsDir, contentDir string, md goldmark.Markdown) (*Shortcodes, error) {
 	helpers := shortcodeHelpers{assetsDir: filepath.Join(contentDir, "assets")}
-	set := template.New("shortcodes").Funcs(helpers.funcMap())
+	set := template.New("shortcodes").Funcs(helpers.funcMap(nil, nil, ""))
 
 	for _, dir := range []string{
 		filepath.Join(themeDir, "layouts", "shortcodes"),
@@ -51,10 +53,29 @@ func loadShortcodes(themeDir, siteLayoutsDir, contentDir string, md goldmark.Mar
 	}, nil
 }
 
-// funcMap returns the template functions available to shortcodes
-func (h shortcodeHelpers) funcMap() template.FuncMap {
+// funcMap builds the shortcode template functions. It's called twice: at parse
+// time with zero state (the funcs are only constructed there, never executed),
+// and once per page from Expand with the real seen-set and build context
+func (h shortcodeHelpers) funcMap(seen map[string]struct{}, ctx *engine.BuildCtx, pageKey string) template.FuncMap {
 	return template.FuncMap{
-		"readDir": h.readDir,
+		"readDir": func(sub string) ([]string, error) {
+			if seen != nil {
+				seen[sub] = struct{}{}
+			}
+			return h.readDir(sub)
+		},
+		"image": func(src string) (imageMeta, error) {
+			src = strings.TrimPrefix(src, "/") // hero passes "assets/x", readDir gives "/assets/x"
+			res, err := ctx.Need(pageKey, "@image:"+src)
+			if err != nil {
+				return imageMeta{}, err
+			}
+			var m imageMeta
+			if err := json.Unmarshal(res.Meta, &m); err != nil {
+				return imageMeta{}, err
+			}
+			return m, nil
+		},
 	}
 }
 
@@ -101,7 +122,7 @@ func groupSubstring(md string, m []int, idx int) string {
 // Expand replaces each {{< >}} tag in md with a placeholder token, rendering its
 // HTML into the returned expansion, and returns the asset folders any readDir
 // shortcodes read. Tags inside code fences are left untouched
-func (s *Shortcodes) Expand(md string) (expansion, []string, error) {
+func (s *Shortcodes) Expand(ctx *engine.BuildCtx, pageKey string, md string) (expansion, []string, error) {
 
 	// Early exit if No shortcodes exist
 	if !strings.Contains(md, "{{<") {
@@ -118,14 +139,7 @@ func (s *Shortcodes) Expand(md string) (expansion, []string, error) {
 	if err != nil {
 		return expansion{}, nil, err
 	}
-	setClone.Funcs(template.FuncMap{
-		"readDir": func(sub string) ([]string, error) {
-			// here we note down the path that the shortcode reads
-			seen[sub] = struct{}{}
-			// then perform the usual combining of all the paths in the directory
-			return s.helpers.readDir(sub)
-		},
-	})
+	setClone.Funcs(s.helpers.funcMap(seen, ctx, pageKey))
 
 	// This matches is a [][]int and each row contains index of the matched string indices
 	// Each row includes the different groups in that specific match of the string (can be worded better)

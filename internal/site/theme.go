@@ -1,11 +1,81 @@
 package site
 
 import (
+	"errors"
 	"html/template"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/notblankz/forge/internal/engine"
 )
+
+// @theme - the theme's template files. Content-hashed by concatenating each
+// template's hash (deterministic WalkDir order), matching old forge's @theme
+type themeData struct {
+	theme      *template.Template
+	shortcodes *Shortcodes
+}
+
+type themeNode struct {
+	themeDir    string
+	siteLayouts string
+	contentDir  string
+}
+
+func (t themeNode) Hash(string) (string, error) {
+	var sum strings.Builder
+	for _, dir := range []string{filepath.Join(t.themeDir, "layouts"), t.siteLayouts} {
+
+		err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					return nil
+				}
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			h, err := engine.HashFile(path)
+			if err != nil {
+				return err
+			}
+			sum.WriteString(h)
+			return nil
+		})
+		if err != nil {
+			return "", err
+		}
+	}
+	return engine.HashBytes([]byte(sum.String())), nil
+}
+
+func (t themeNode) Build(ctx *engine.BuildCtx, key string) (engine.Result, error) {
+	cfg, err := ctx.Need(key, "@config")
+	if err != nil {
+		return engine.Result{}, err
+	}
+	md := cfg.Data.(configData).markdown
+
+	theme, err := loadTheme(t.themeDir, t.siteLayouts)
+	if err != nil {
+		return engine.Result{}, err
+	}
+
+	shortcodes, err := loadShortcodes(t.themeDir, t.siteLayouts, t.contentDir, md)
+	if err != nil {
+		return engine.Result{}, err
+	}
+
+	return engine.Result{
+		Data: themeData{
+			theme:      theme,
+			shortcodes: shortcodes,
+		},
+	}, nil
+}
 
 // loadTheme parses all HTML templates at themeDir (themeDir/layouts/*.html and
 // themeDir/layouts/partials/*.html) into a single template set / theme, keyed
@@ -54,8 +124,8 @@ func mergeOverrides(theme *template.Template, dir string) (*template.Template, e
 // 3) generic "page" fallback
 // NOTE: existence of the template is checked by ExecuteTemplate at call time
 func selectTemplate(theme *template.Template, page Page) string {
-	if page.Frontmatter.Template != "" {
-		name := strings.TrimSuffix(page.Frontmatter.Template, ".html")
+	if page.Frontmatter.Template() != "" {
+		name := strings.TrimSuffix(page.Frontmatter.Template(), ".html")
 		if theme.Lookup(name) != nil {
 			return name
 		}
@@ -69,7 +139,7 @@ func selectTemplate(theme *template.Template, page Page) string {
 	return "page"
 }
 
-// ResolveThemeDir locates a theme from the site.toml `theme` value:
+// ResolveThemeDir locates a theme from the site.yaml `theme` value:
 //   - an absolute path is used as-is
 //   - a relative path is resolved against the site root
 //   - a bare name maps to <siteRoot>/themes/<name>
