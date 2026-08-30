@@ -1,0 +1,320 @@
+name: Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      files:
+        description: "Number of posts to generate"
+        default: "1000"
+        type: string
+      warm:
+        description: "hyperfine warmup runs"
+        default: "10"
+        type: string
+      runs:
+        description: "hyperfine timed runs"
+        default: "20"
+        type: string
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      FILES: ${{ inputs.files }}
+      WARM: ${{ inputs.warm }}
+      RUNS: ${{ inputs.runs }}
+      BENCH: ${{ github.workspace }}/.bench
+      BIN: ${{ github.workspace }}/.bench/forge
+      RAW: ${{ github.workspace }}/.bench/raw
+      PACK: ${{ github.workspace }}/.bench/packed
+      THEME_RAW: ${{ github.workspace }}/.bench/theme-raw
+      THEME_PACK: ${{ github.workspace }}/.bench/theme-packed
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install hyperfine
+        run: sudo apt-get update && sudo apt-get install -y hyperfine
+
+      - name: Record machine info
+        run: |
+          {
+            echo "## Benchmark environment"
+            echo ""
+            echo '```'
+            echo "runner:  ${RUNNER_OS} / $(uname -srm)"
+            echo "commit:  ${GITHUB_SHA}"
+            echo "go:      $(go version | awk '{print $3}')"
+            echo "cpu:     $(lscpu | sed -n 's/^Model name:[[:space:]]*//p')"
+            echo "cores:   $(nproc)"
+            echo "memory:  $(free -h | awk '/Mem:/{print $2}')"
+            echo "corpus:  ${FILES} posts | warmup ${WARM} | runs ${RUNS}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build forge
+        run: |
+          mkdir -p "$BENCH"
+          go build -o "$BIN" .
+
+      - name: Write themes
+        run: |
+          make_theme() {
+            local d="$1" with_shortcodes="$2"
+            mkdir -p "$d/layouts/partials" "$d/layouts/shortcodes"
+
+            cat > "$d/layouts/partials/head.html" <<'HTML'
+          {{ define "head" }}<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ .Site.title }}</title></head>{{ end }}
+          HTML
+            cat > "$d/layouts/partials/nav.html" <<'HTML'
+          {{ define "nav" }}<nav><a href="/">{{ .Site.title }}</a></nav>{{ end }}
+          HTML
+            cat > "$d/layouts/partials/footer.html" <<'HTML'
+          {{ define "footer" }}<footer>built with forge</footer>{{ end }}
+          HTML
+            cat > "$d/layouts/page.html" <<'HTML'
+          {{ define "page" }}<!doctype html><html lang="en">{{ template "head" . }}<body>{{ template "nav" . }}<main><article>{{ .Content }}</article></main>{{ template "footer" . }}</body></html>{{ end }}
+          HTML
+            cat > "$d/layouts/listing.html" <<'HTML'
+          {{ define "listing" }}<!doctype html><html lang="en">{{ template "head" . }}<body>{{ template "nav" . }}<main><h1>{{ .Name }}</h1><ul>{{ range .Pages }}<li><a href="{{ .url }}">{{ .title }}</a>{{ if not .date.IsZero }} <time>{{ .date.Format "2006-01-02" }}</time>{{ end }}</li>{{ end }}</ul></main>{{ template "footer" . }}</body></html>{{ end }}
+          HTML
+
+            if [[ "$with_shortcodes" == "1" ]]; then
+              cat > "$d/layouts/shortcodes/hero-photo.html" <<'HTML'
+          <figure class="hero">{{ with image .src }}<img src="{{ .Src }}" alt="{{ $.title }}"{{ if .Srcset }} srcset="{{ .Srcset }}" sizes="100vw"{{ end }}{{ if .Width }} width="{{ .Width }}" height="{{ .Height }}"{{ end }}>{{ end }}<figcaption>{{ .title }} - {{ .date }}</figcaption></figure>
+          HTML
+              cat > "$d/layouts/shortcodes/photo-masonry.html" <<'HTML'
+          <div class="masonry">{{ range readDir .src }}{{ with image . }}<img src="{{ .Src }}"{{ if .Srcset }} srcset="{{ .Srcset }}" sizes="(max-width:600px) 100vw, 33vw"{{ end }} loading="lazy">{{ end }}{{ end }}</div>
+          HTML
+            fi
+          }
+          make_theme "$THEME_RAW" 0
+          make_theme "$THEME_PACK" 1
+
+      - name: Scaffold sites and images
+        run: |
+          mkdir -p "$RAW/content/posts" "$PACK/content/posts" "$PACK/content/assets/gallery"
+
+          cat > "$RAW/site.yaml" <<EOF
+          title: Forge Bench (raw)
+          theme: $THEME_RAW
+          syntax_highlighting: false
+          EOF
+
+          cat > "$PACK/site.yaml" <<EOF
+          title: Forge Bench (packed)
+          theme: $THEME_PACK
+          syntax_highlighting: true
+          image_sizes: [1200, 800, 400]
+          base_url: https://example.com
+          EOF
+
+          printf -- '---\ntitle: Home\n---\n# Home\n' > "$RAW/content/home.md"
+          printf -- '---\ntitle: Home\n---\n# Home\n' > "$PACK/content/home.md"
+
+          cat > /tmp/genjpeg.go <<'GO'
+          package main
+
+          import (
+              "image"
+              "image/color"
+              "image/jpeg"
+              "os"
+              "strconv"
+          )
+
+          func main() {
+              w, _ := strconv.Atoi(os.Args[2])
+              h, _ := strconv.Atoi(os.Args[3])
+              img := image.NewRGBA(image.Rect(0, 0, w, h))
+              for y := 0; y < h; y++ {
+                  for x := 0; x < w; x++ {
+                      img.Set(x, y, color.RGBA{uint8(x), uint8(y), uint8(x ^ y), 255})
+                  }
+              }
+              f, _ := os.Create(os.Args[1])
+              defer f.Close()
+              _ = jpeg.Encode(f, img, &jpeg.Options{Quality: 82})
+          }
+          GO
+          go build -o "$BENCH/genjpeg" /tmp/genjpeg.go
+          "$BENCH/genjpeg" "$PACK/content/assets/hero.jpg" 1920 1080
+          for k in 1 2 3 4 5 6; do
+            "$BENCH/genjpeg" "$PACK/content/assets/gallery/img_$k.jpg" 1600 1200
+          done
+
+      - name: Generate corpus
+        run: |
+          N7=$(( FILES * 70 / 100 ))
+          N9=$(( FILES * 90 / 100 ))
+          export N7 N9 RAW PACK
+
+          generate_post() {
+            local file="$1" id="$2" sections="$3" mode="$4" j
+            {
+              printf -- '---\ntitle: Benchmark Post %s\ndate: 2024-01-%02d\ndescription: synthetic page %s\n---\n\n' \
+                "$id" "$(( (id % 28) + 1 ))" "$id"
+              [[ "$mode" == packed ]] && \
+                printf '{{< hero-photo src="assets/hero.jpg" title="Post %s" date="2024" >}}\n\n' "$id"
+              printf '# Benchmark Post %s\n\nIntro with **bold**, *italic*, `inline code`, and a [link](https://example.com).\n' "$id"
+              for (( j = 0; j < sections; j++ )); do
+                cat <<EOF
+
+          ## Section $j of post $id
+
+          Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor
+          incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam.
+
+          - first item
+          - second item with \`code\`
+          - third item -> [section 0](#section-0-of-post-$id)
+
+          | col a | col b | col c |
+          | ----- | ----- | ----- |
+          | $id   | $j    | done  |
+
+          > A blockquote for section $j worth *emphasising*.
+
+          \`\`\`go
+          package main
+
+          import "fmt"
+
+          func main() {
+              sum := 0
+              for i := 0; i < $j; i++ {
+                  sum += i
+              }
+              fmt.Printf("post $id section $j -> %d\n", sum)
+          }
+          \`\`\`
+          EOF
+              done
+              [[ "$mode" == packed ]] && \
+                printf '\n## Gallery\n\n{{< photo-masonry src="assets/gallery" >}}\n'
+            } > "$file"
+          }
+
+          run_one() {
+            local i="$1" s
+            if   (( i <  N7 )); then s=10
+            elif (( i <  N9 )); then s=50
+            else                     s=200
+            fi
+            generate_post "$RAW/content/posts/post_$i.md"  "$i" "$s" raw
+            generate_post "$PACK/content/posts/post_$i.md" "$i" "$s" packed
+          }
+          export -f generate_post run_one
+
+          seq 0 $(( FILES - 1 )) | xargs -P"$(nproc)" -I{} bash -c 'run_one "$@"' _ {}
+
+          cat > "$BENCH/touch-one.sh" <<'SH'
+          #!/usr/bin/env bash
+          printf '\n<!-- %s -->\n' "$(date +%s%N)" >> "$1"
+          SH
+          chmod +x "$BENCH/touch-one.sh"
+
+          echo "raw:    $(find "$RAW/content/posts"  -name '*.md' | wc -l) posts"
+          echo "packed: $(find "$PACK/content/posts" -name '*.md' | wc -l) posts"
+
+      - name: Run benchmarks
+        run: |
+          bench_site() {
+            local name="$1" site="$2"
+
+            echo "==================== $name COLD ===================="
+            hyperfine --warmup "$WARM" --runs "$RUNS" \
+              --export-markdown "$BENCH/$name-cold.md" --export-json "$BENCH/$name-cold.json" \
+              --prepare "rm -rf '$site/dist' '$site/.forge-manifest.json'" \
+              -n forge "$BIN build $site"
+
+            echo "==================== $name NO-OP ===================="
+            hyperfine --warmup "$WARM" --runs "$RUNS" \
+              --export-markdown "$BENCH/$name-noop.md" \
+              --setup "$BIN build $site" \
+              -n forge "$BIN build $site"
+
+            echo "==================== $name EDIT ===================="
+            hyperfine --warmup "$WARM" --runs "$RUNS" \
+              --export-markdown "$BENCH/$name-edit.md" \
+              --setup "$BIN build $site" \
+              --prepare "$BENCH/touch-one.sh '$site/content/posts/post_0.md'" \
+              -n forge "$BIN build $site"
+          }
+
+          bench_site raw    "$RAW"
+          bench_site packed "$PACK"
+
+          bench_cores() {
+            local name="$1" site="$2"
+            echo "==================== concurrency ($name, cold) ===================="
+            hyperfine --warmup "$WARM" --runs "$RUNS" \
+              --export-markdown "$BENCH/concurrency-$name.md" \
+              --prepare "rm -rf '$site/dist' '$site/.forge-manifest.json'" \
+              -n "multi-core"  "$BIN build $site" \
+              -n "single-core" "taskset -c 0 $BIN build $site"
+          }
+          bench_cores raw    "$RAW"
+          bench_cores packed "$PACK"
+
+      - name: Publish reports to job summary
+        if: always()
+        run: |
+          title_for() {
+            case "$1" in
+              raw-cold)    echo "Bare build - cold, from scratch";;
+              raw-noop)    echo "Bare build - rebuild with no changes";;
+              raw-edit)    echo "Bare build - one page edited";;
+              packed-cold) echo "Full-featured build - cold, from scratch";;
+              packed-noop) echo "Full-featured build - rebuild with no changes";;
+              packed-edit) echo "Full-featured build - one page edited";;
+              concurrency-raw)    echo "Concurrency (bare) - all cores vs a single core";;
+              concurrency-packed) echo "Concurrency (full-featured) - all cores vs a single core";;
+              *)           echo "$1";;
+            esac
+          }
+          desc_for() {
+            case "$1" in
+              raw-cold)    echo "Plain Markdown only (no syntax highlighting, images, or shortcodes), built with an empty cache. The leanest possible full build.";;
+              raw-noop)    echo "Building again with nothing changed - every page is served from the cache.";;
+              raw-edit)    echo "One post is changed, then the site is rebuilt: only that page and its listing are regenerated.";;
+              packed-cold) echo "Everything switched on - syntax highlighting, the responsive image pipeline, and shortcodes - built with an empty cache.";;
+              packed-noop) echo "Building again with nothing changed - pages and generated image variants all come from the cache.";;
+              packed-edit) echo "One post is changed, then the site is rebuilt: only that page and its listing are regenerated; cached images are untouched.";;
+              concurrency-raw)    echo "The bare cold build run two ways - across every CPU core, then pinned to one core with taskset - isolating the parallel-build speedup on the pure render path.";;
+              concurrency-packed) echo "The full-featured cold build run two ways - across every CPU core, then pinned to one core with taskset - the parallel speedup with syntax highlighting and the image pipeline in the mix.";;
+              *)           echo "";;
+            esac
+          }
+
+          echo "## Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          for key in raw-cold raw-noop raw-edit concurrency-raw packed-cold packed-noop packed-edit concurrency-packed; do
+            f="$BENCH/$key.md"
+            [ -f "$f" ] || continue
+            {
+              echo "### $(title_for "$key")"
+              echo ""
+              d="$(desc_for "$key")"
+              [ -n "$d" ] && { echo "_${d}_"; echo ""; }
+              cat "$f"
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-reports
+          path: |
+            ${{ github.workspace }}/.bench/*.md
+            ${{ github.workspace }}/.bench/*.json
+          if-no-files-found: warn
