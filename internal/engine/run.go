@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"maps"
 	"os"
 	"runtime"
 
@@ -32,44 +31,68 @@ func Run(prevManifest Manifest, targets []string, mark func(string)) (Manifest, 
 		prevManifest = Manifest{}
 	}
 
-	// copy the prevManifest into the refreshedManifest snapshot
+	// final new Manifest which will be filled after re-fingerprinting all the nodes
 	refreshedManifest := Manifest{}
-	maps.Copy(refreshedManifest, prevManifest)
 
-	// nodesToRecheck is the set of nodes we have to re-check for changes
-	// nodesToRecheck includes all nodes in prevManifest and the targets
-	// this function is currently building
-	nodesToRecheck := map[string]struct{}{}
+	// keys = last build's nodes plus this run's targets (deduped against prevManifest)
+	keys := make([]string, 0, len(prevManifest)+len(targets))
 	for key := range prevManifest {
-		nodesToRecheck[key] = struct{}{}
-	}
-	for _, key := range targets {
-		nodesToRecheck[key] = struct{}{}
+		keys = append(keys, key)
 	}
 
-	// go through each node that we have to recheck, calculate it's new hash
-	// and update the hash in refreshedManifest to create the dirty set later
-	for key := range nodesToRecheck {
-		b, ok := builderFor(key)
-		if !ok {
-			return nil, fmt.Errorf("engine: no builder for %q", key)
+	for _, t := range targets {
+		if _, ok := prevManifest[t]; !ok {
+			keys = append(keys, t)
 		}
+	}
 
-		h, err := b.Hash(key)
-		if errors.Is(err, fs.ErrNotExist) {
-			// Source file is gone. Dropping it from refreshedManifest while it
-			// still exists in prevManifest is exactly how DirtySet reads a
-			// deletion - which then propagates to whatever depended on i
+	// per node hashing outcome: the fresh hash or gone=true when the source has disappeared
+	type hashResult struct {
+		hash string
+		gone bool
+	}
+	result := make([]hashResult, len(keys))
+
+	// re-fingerprint every node concurrently - Each goroutine writes only result[i] with a
+	// hashResult struct which can easily show if the key was hashed or deleted. Any other error
+	// exits the entire group
+	hg := new(errgroup.Group)
+	hg.SetLimit(runtime.NumCPU())
+	for i, key := range keys {
+		hg.Go(func() error {
+			b, ok := builderFor(key)
+			if !ok {
+				return fmt.Errorf("engine: no builder for %q", key)
+			}
+			h, err := b.Hash(key)
+			if errors.Is(err, fs.ErrNotExist) {
+				result[i] = hashResult{gone: true}
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			result[i] = hashResult{hash: h}
+			return nil
+		})
+	}
+
+	if err := hg.Wait(); err != nil {
+		return nil, err
+	}
+
+	// merge the result of the above concurrent execution into the map serially
+	// since Go maps are not concurrent safe for writes. Updates the hash for
+	// all the nodes
+	for i, key := range keys {
+		if result[i].gone {
 			delete(refreshedManifest, key)
 			continue
 		}
-		if err != nil {
-			return nil, err
-		}
-		manifestEntry := prevManifest[key]
-		manifestEntry.Hash = h
-		manifestEntry.Kind = kindOf(key)
-		refreshedManifest[key] = manifestEntry
+		entry := prevManifest[key]
+		entry.Hash = result[i].hash
+		entry.Kind = kindOf(key)
+		refreshedManifest[key] = entry
 	}
 
 	markStep("hash refresh")
