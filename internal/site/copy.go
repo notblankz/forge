@@ -10,46 +10,25 @@ import (
 	"github.com/notblankz/forge/internal/engine"
 )
 
-// @assets - node which mirrors content/assets to dest/assets
-type assetsNode struct {
-	contentDir string
-	destDir    string
+// @assets / @theme-static / @root - mirror a directory into dist.
+// relBase controls the prefix: relBase == srcDir means "copy to dist root"
+type copyDirNode struct {
+	srcDir  string
+	relBase string
+	destDir string
 }
 
-func (a assetsNode) Hash(string) (string, error) {
-	h, err := engine.HashDir(filepath.Join(a.contentDir, "assets"))
+func (c copyDirNode) Hash(string) (string, error) {
+	h, err := engine.HashDir(c.srcDir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return "", nil
 	}
 	return h, nil
 }
 
-func (a assetsNode) Build(*engine.BuildCtx, string) (engine.Result, error) {
-	dests, err := copyTree(filepath.Join(a.contentDir, "assets"), a.contentDir, a.destDir)
-	return engine.Result{
-		Outputs: dests,
-	}, err
-}
-
-// @theme-static - node that mirrors theme's static into dist/
-type themeStaticNode struct {
-	themeDir string
-	destDir  string
-}
-
-func (t themeStaticNode) Hash(string) (string, error) {
-	h, err := engine.HashDir(filepath.Join(t.themeDir, "static"))
-	if errors.Is(err, fs.ErrNotExist) {
-		return "", nil
-	}
-	return h, err
-}
-
-func (t themeStaticNode) Build(*engine.BuildCtx, string) (engine.Result, error) {
-	dests, err := copyTree(filepath.Join(t.themeDir, "static"), t.themeDir, t.destDir)
-	return engine.Result{
-		Outputs: dests,
-	}, err
+func (c copyDirNode) Build(*engine.BuildCtx, string) (engine.Result, error) {
+	dests, err := copyTree(c.srcDir, c.relBase, c.destDir)
+	return engine.Result{Outputs: dests}, err
 }
 
 // copyTree recursively copies every file under srcDir into destDir, preserving
