@@ -1,5 +1,5 @@
 [build]
-  command = 'go build -o forge . && ./forge build docs && cp docs/llms.txt docs/dist/llms.txt'
+  command = 'go build -o forge . && ./forge build docs'
   publish = "docs/dist"
 
 [build.environment]
