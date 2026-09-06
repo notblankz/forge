@@ -15,6 +15,14 @@ on:
         description: "hyperfine timed runs"
         default: "20"
         type: string
+      sha_a:
+        description: "Commit/ref A to build (blank = current checkout HEAD)"
+        default: ""
+        type: string
+      sha_b:
+        description: "Commit/ref B for A/B compare (blank = single-binary run)"
+        default: ""
+        type: string
 
 jobs:
   bench:
@@ -25,7 +33,6 @@ jobs:
       WARM: ${{ inputs.warm }}
       RUNS: ${{ inputs.runs }}
       BENCH: ${{ github.workspace }}/.bench
-      BIN: ${{ github.workspace }}/.bench/forge
       RAW: ${{ github.workspace }}/.bench/raw
       PACK: ${{ github.workspace }}/.bench/packed
       THEME_RAW: ${{ github.workspace }}/.bench/theme-raw
@@ -33,6 +40,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so git worktree can build arbitrary refs
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -56,13 +65,48 @@ jobs:
             echo "cores:   $(nproc)"
             echo "memory:  $(free -h | awk '/Mem:/{print $2}')"
             echo "corpus:  ${FILES} posts | warmup ${WARM} | runs ${RUNS}"
+            if [ -n "${{ inputs.sha_b }}" ]; then
+              echo "mode:    A/B  (A=${{ inputs.sha_a }}  B=${{ inputs.sha_b }})"
+            else
+              echo "mode:    single"
+            fi
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Build forge
+      - name: Build binaries
         run: |
           mkdir -p "$BENCH"
-          go build -o "$BIN" .
+          : > "$BENCH/targets.txt"
+
+          # build forge at a git ref into $2; blank ref = the current checkout.
+          # arbitrary refs are built in a throwaway worktree so main is untouched.
+          build_at() {
+            local ref="$1" out="$2"
+            if [ -z "$ref" ]; then
+              go build -o "$out" .
+              return
+            fi
+            local wt="${RUNNER_TEMP}/wt-${ref//[^a-zA-Z0-9]/_}"
+            git worktree add --detach "$wt" "$ref"
+            ( cd "$wt" && go build -o "$out" . )
+            git worktree remove --force "$wt"
+          }
+
+          if [ -n "${{ inputs.sha_b }}" ]; then
+            # A/B: two binaries, labelled by short SHA
+            A_REF="${{ inputs.sha_a }}"; A_REF="${A_REF:-HEAD}"
+            B_REF="${{ inputs.sha_b }}"
+            build_at "${{ inputs.sha_a }}" "$BENCH/forge_a"
+            build_at "$B_REF"              "$BENCH/forge_b"
+            printf '%s %s\n' "$(git rev-parse --short "$A_REF")" "$BENCH/forge_a" >> "$BENCH/targets.txt"
+            printf '%s %s\n' "$(git rev-parse --short "$B_REF")" "$BENCH/forge_b" >> "$BENCH/targets.txt"
+          else
+            # single binary (default), labelled "forge" as before
+            build_at "${{ inputs.sha_a }}" "$BENCH/forge"
+            printf '%s %s\n' forge "$BENCH/forge" >> "$BENCH/targets.txt"
+          fi
+
+          echo "targets:"; cat "$BENCH/targets.txt"
 
       - name: Write themes
         run: |
@@ -207,43 +251,62 @@ jobs:
 
       - name: Run benchmarks
         run: |
+          # load the binaries to benchmark (label + path per line)
+          labels=(); bins=()
+          while read -r lbl path; do labels+=("$lbl"); bins+=("$path"); done < "$BENCH/targets.txt"
+          AB=0; [ "${#bins[@]}" -gt 1 ] && AB=1
+
+          # build the hyperfine "-n <label> <cmd>" args for one site, one entry per binary
+          targets_for() {
+            local site="$1" i
+            TARGETS=()
+            for i in "${!bins[@]}"; do
+              TARGETS+=( -n "${labels[$i]}" "${bins[$i]} build $site" )
+            done
+          }
+
           bench_site() {
             local name="$1" site="$2"
+            targets_for "$site"
 
             echo "==================== $name COLD ===================="
             hyperfine --warmup "$WARM" --runs "$RUNS" \
               --export-markdown "$BENCH/$name-cold.md" --export-json "$BENCH/$name-cold.json" \
               --prepare "rm -rf '$site/dist' '$site/.forge-manifest.json'" \
-              -n forge "$BIN build $site"
+              "${TARGETS[@]}"
 
             echo "==================== $name NO-OP ===================="
             hyperfine --warmup "$WARM" --runs "$RUNS" \
               --export-markdown "$BENCH/$name-noop.md" \
-              --setup "$BIN build $site" \
-              -n forge "$BIN build $site"
+              --setup "${bins[0]} build $site" \
+              "${TARGETS[@]}"
 
             echo "==================== $name EDIT ===================="
             hyperfine --warmup "$WARM" --runs "$RUNS" \
               --export-markdown "$BENCH/$name-edit.md" \
-              --setup "$BIN build $site" \
+              --setup "${bins[0]} build $site" \
               --prepare "$BENCH/touch-one.sh '$site/content/posts/post_0.md'" \
-              -n forge "$BIN build $site"
+              "${TARGETS[@]}"
           }
 
           bench_site raw    "$RAW"
           bench_site packed "$PACK"
 
-          bench_cores() {
-            local name="$1" site="$2"
-            echo "==================== concurrency ($name, cold) ===================="
-            hyperfine --warmup "$WARM" --runs "$RUNS" \
-              --export-markdown "$BENCH/concurrency-$name.md" \
-              --prepare "rm -rf '$site/dist' '$site/.forge-manifest.json'" \
-              -n "multi-core"  "$BIN build $site" \
-              -n "single-core" "taskset -c 0 $BIN build $site"
-          }
-          bench_cores raw    "$RAW"
-          bench_cores packed "$PACK"
+          # core-scaling compares a binary against itself, so it only makes sense
+          # for a single binary; skip it in A/B mode.
+          if [ "$AB" -eq 0 ]; then
+            bench_cores() {
+              local name="$1" site="$2"
+              echo "==================== concurrency ($name, cold) ===================="
+              hyperfine --warmup "$WARM" --runs "$RUNS" \
+                --export-markdown "$BENCH/concurrency-$name.md" \
+                --prepare "rm -rf '$site/dist' '$site/.forge-manifest.json'" \
+                -n "multi-core"  "${bins[0]} build $site" \
+                -n "single-core" "taskset -c 0 ${bins[0]} build $site"
+            }
+            bench_cores raw    "$RAW"
+            bench_cores packed "$PACK"
+          fi
 
       - name: Publish reports to job summary
         if: always()
