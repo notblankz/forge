@@ -52,7 +52,7 @@ func Build(opts BuildOptions) error {
 		}
 	}
 
-	targets := []string{"@assets", "@theme-static"}
+	targets := []string{"@assets", "@theme-static", "@root"}
 	for _, p := range contentPaths {
 		targets = append(targets, "@page:"+p)
 	}

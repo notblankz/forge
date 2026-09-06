@@ -14,7 +14,13 @@ func registerNodes(paths SitePaths, themeDir string, listingMembers map[string][
 	engine.Register("@listing", listingNode{members: listingMembers, destDir: paths.Dest})
 	engine.Register("@assets", copyDirNode{srcDir: filepath.Join(paths.Content, "assets"), relBase: paths.Content, destDir: paths.Dest})
 	engine.Register("@theme-static", copyDirNode{srcDir: filepath.Join(themeDir, "static"), relBase: themeDir, destDir: paths.Dest})
-	engine.Register("@root", copyDirNode{srcDir: paths.Root, relBase: paths.Root, destDir: paths.Dest})
+
+	rootFiles := filepath.Join(paths.Root, "root")
+	engine.Register("@root", copyDirNode{
+		srcDir:  rootFiles,
+		relBase: rootFiles,
+		destDir: paths.Dest,
+	})
 	engine.Register("@image", imageNode{contentDir: paths.Content, destDir: paths.Dest, sizes: imageSizes})
 
 	listingNames := make([]string, 0, len(listingMembers))
